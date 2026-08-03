@@ -5,7 +5,7 @@
 
    Usage:
      SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy node scripts/spotify-auth.mjs
-   Then paste the printed token into the SPOTIFY_REFRESH_TOKEN repo secret.
+   Then set the printed token on the Worker: cd worker && npx wrangler secret put SPOTIFY_REFRESH_TOKEN
    ============================================================ */
 import http from "node:http";
 

@@ -76,10 +76,11 @@ end fails as an opaque `400`, and all three must come from the *same* Spotify ap
 If the client ID and the token come from different apps, Spotify returns
 `400 invalid_grant`, which looks identical to a bad token.
 
-Sanity check, from the repository root, that the trio works before deploying:
+Sanity check that the trio works before deploying. From the repository root, paste the same
+three values you just entered (no quotes, no extra whitespace):
 
 ```bash
-node --env-file=scripts/.env -e '
+SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy SPOTIFY_REFRESH_TOKEN=zzz node -e '
 const b = Buffer.from(process.env.SPOTIFY_CLIENT_ID + ":" + process.env.SPOTIFY_CLIENT_SECRET).toString("base64");
 const r = await fetch("https://accounts.spotify.com/api/token", {
   method: "POST",
@@ -90,7 +91,7 @@ const j = await r.json();
 console.log(r.status, j.error || "ok", j.scope || "");'
 ```
 
-Expect `200 ok user-read-currently-playing user-read-recently-played`.
+If the credentials and token are good, expect `200 ok user-read-currently-playing user-read-recently-played`. If you see `invalid_grant` or `invalid_client`, the token and client ID are from different apps or one is wrong; redo step 4.
 
 ### 5. Run it locally
 
