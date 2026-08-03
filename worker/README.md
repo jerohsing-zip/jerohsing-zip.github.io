@@ -57,6 +57,12 @@ From the repository root:
 SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy node scripts/spotify-auth.mjs
 ```
 
+PowerShell:
+
+```powershell
+$env:SPOTIFY_CLIENT_ID="xxx"; $env:SPOTIFY_CLIENT_SECRET="yyy"; node scripts/spotify-auth.mjs
+```
+
 It prints a URL. Before opening it, add `http://127.0.0.1:8888/callback` as a
 Redirect URI in your app at
 [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and save.
@@ -76,19 +82,18 @@ end fails as an opaque `400`, and all three must come from the *same* Spotify ap
 If the client ID and the token come from different apps, Spotify returns
 `400 invalid_grant`, which looks identical to a bad token.
 
-Sanity check that the trio works before deploying. From the repository root, paste the same
-three values you just entered (no quotes, no extra whitespace):
+Sanity check that the trio works before deploying, using the committed
+`scripts/spotify-sanity-check.mjs`. From the repository root, paste the same three
+values you just entered (no quotes, no extra whitespace):
 
 ```bash
-SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy SPOTIFY_REFRESH_TOKEN=zzz node -e '
-const b = Buffer.from(process.env.SPOTIFY_CLIENT_ID + ":" + process.env.SPOTIFY_CLIENT_SECRET).toString("base64");
-const r = await fetch("https://accounts.spotify.com/api/token", {
-  method: "POST",
-  headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + b },
-  body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: process.env.SPOTIFY_REFRESH_TOKEN })
-});
-const j = await r.json();
-console.log(r.status, j.error || "ok", j.scope || "");'
+SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy SPOTIFY_REFRESH_TOKEN=zzz node scripts/spotify-sanity-check.mjs
+```
+
+PowerShell:
+
+```powershell
+$env:SPOTIFY_CLIENT_ID="xxx"; $env:SPOTIFY_CLIENT_SECRET="yyy"; $env:SPOTIFY_REFRESH_TOKEN="zzz"; node scripts/spotify-sanity-check.mjs
 ```
 
 If the credentials and token are good, expect `200 ok user-read-currently-playing user-read-recently-played`. If you see `invalid_grant` or `invalid_client`, the token and client ID are from different apps or one is wrong; redo step 4.

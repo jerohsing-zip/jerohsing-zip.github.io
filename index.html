@@ -57,11 +57,16 @@
         <li class="sig reveal" data-sig="listen">
           <span class="sig__k mono">Listening</span>
           <span class="sig__art" data-art aria-hidden="true"><i>♪</i></span>
+          <!-- Pre-JS placeholder only. renderListen() in app.js overwrites this on
+               every load. It MUST stay neutral (matching renderListen(null)) since
+               the Worker may be unreachable or unconfigured for a while after the
+               static HTML is deployed — a fabricated track here has shipped as a
+               permanent lie before. Do not put real-looking track text back in. -->
           <span class="sig__body">
-            <span class="sig__title" data-listen-title>Blue Hour</span>
-            <span class="sig__sub mono"><span data-listen-artist>Yves Tumor</span></span>
+            <span class="sig__title" data-listen-title>quiet right now</span>
+            <span class="sig__sub mono"><span data-listen-artist>no track</span></span>
           </span>
-          <span class="sig__stamp mono" data-stamp="listen">18m ago</span>
+          <span class="sig__stamp mono" data-stamp="listen"></span>
         </li>
 
         <li class="sig reveal" data-sig="play">

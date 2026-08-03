@@ -50,11 +50,11 @@ async function spotify() {
     const j = await np.json();
     if (j && j.item) return { note: "now playing: " + j.item.name };
   }
-  const top = await fetch("https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=1", { headers: auth });
-  if (!top.ok) throw new Error("top tracks HTTP " + top.status +
-    (top.status === 403 ? " — token missing the user-top-read scope; re-run spotify-auth.mjs" : ""));
-  const j = await top.json();
-  if (j.items && j.items[0]) return { note: "nothing playing; top track: " + j.items[0].name };
+  const recent = await fetch("https://api.spotify.com/v1/me/player/recently-played?limit=1", { headers: auth });
+  if (!recent.ok) throw new Error("recently-played HTTP " + recent.status +
+    (recent.status === 403 ? " — token missing the user-read-recently-played scope; re-run spotify-auth.mjs" : ""));
+  const j = await recent.json();
+  if (j.items && j.items[0]) return { note: "nothing playing; last played: " + j.items[0].track.name };
   return { note: "authenticated, but no listening history yet" };
 }
 

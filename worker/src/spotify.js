@@ -84,7 +84,9 @@ async function recentlyPlayed(auth) {
   const res = await fetch(API + "/me/player/recently-played?limit=1", { headers: auth });
   if (!res.ok) throw new Error("spotify recently-played " + res.status);
 
-  const j = await res.json().catch(() => null);
+  let j;
+  try { j = await res.json(); }
+  catch { throw new Error("spotify recently-played: malformed body"); }
   const item = j && j.items && j.items[0];
   if (!item || !item.track) return null;
 

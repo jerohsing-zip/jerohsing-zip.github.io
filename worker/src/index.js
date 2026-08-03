@@ -61,7 +61,8 @@ export default {
       return json({ error: "method not allowed" }, 405, { ...cors, Allow: "GET, OPTIONS" });
     }
 
-    const ttl = Number(env.CACHE_TTL ?? 20);
+    const parsedTtl = Number(env.CACHE_TTL);
+    const ttl = Number.isFinite(parsedTtl) && parsedTtl >= 0 ? parsedTtl : 20;
     const cache = caches.default;
     const cacheKey = new Request(url.origin + "/", { method: "GET" });
 
@@ -80,7 +81,7 @@ export default {
       return res;
     } catch (e) {
       console.error("[now-spotify]", e.message);
-      return json({ error: "upstream unavailable", detail: e.message }, 502, {
+      return json({ error: "upstream unavailable" }, 502, {
         ...cors,
         "Cache-Control": "no-store"
       });

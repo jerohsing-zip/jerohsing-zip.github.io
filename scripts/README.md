@@ -88,9 +88,10 @@ Running with no credentials is safe: every source returns "no data", the previou
 `live.json` is only rewritten when a **signal** actually changes. Because the
 workflow runs every 20 minutes, bumping `fetchedAt` on every run would mean a commit
 every 20 minutes — ~2,000/month of noise. So `fetchedAt` means *"when the data last
-changed"*, which is also what the page's "updated Xm ago" is really saying. A
-now-playing track's `at` is excluded from that comparison (it restamps every run and
-isn't rendered while playing), so a single song doesn't churn the file either.
+changed"*, which is also what the page's "updated Xm ago" is really saying.
+`pick()` compares only `location`, `playing`, and `shipping` — listening now lives
+entirely in the now-spotify Worker (see `worker/README.md`), never in this file, so
+it plays no part in the comparison at all.
 
 Keep `.env` out of git. The bare `.env` pattern in `.gitignore` matches at any depth,
 so `scripts/.env` is covered — confirm before your first commit:

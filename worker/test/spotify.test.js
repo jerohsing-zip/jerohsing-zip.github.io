@@ -188,4 +188,22 @@ describe("getTrack", () => {
 
     await expect(getTrack(ENV)).rejects.toThrow(/recently-played 403/);
   });
+
+  it("throws when recently-played returns 200 with a malformed body, rather than treating it as silence", async () => {
+    stubSpotify({
+      current: () => new Response(null, { status: 204 }),
+      recent: () => new Response("not json", { status: 200 })
+    });
+
+    await expect(getTrack(ENV)).rejects.toThrow(/recently-played.*malformed body/);
+  });
+
+  it("throws when currently-playing fails with a non-204 non-OK status", async () => {
+    stubSpotify({
+      current: () => new Response(null, { status: 500 }),
+      recent: noRecent
+    });
+
+    await expect(getTrack(ENV)).rejects.toThrow(/currently-playing 500/);
+  });
 });

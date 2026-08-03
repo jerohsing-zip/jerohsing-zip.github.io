@@ -149,7 +149,8 @@ import { createSky } from "./sky.js";
     if (row) row.classList.remove("sig--empty");
     setText("[data-listen-title]", d.title); setText("[data-listen-artist]", d.artist || "");
     if (art && d.art) { art.style.backgroundImage = 'url("' + d.art + '")'; art.classList.add("has-art"); }
-    setText('[data-stamp="listen"]', d.nowPlaying ? "now" : (d.period === "week" ? "top this week" : ago(d.at)));
+    else if (art) { art.style.backgroundImage = ""; art.classList.remove("has-art"); }
+    setText('[data-stamp="listen"]', d.nowPlaying ? "now" : ago(d.at));
   }
   function renderPlay(d) {
     var row = $('[data-sig="play"]');
@@ -192,7 +193,7 @@ import { createSky } from "./sky.js";
   var SPOTIFY_URL = "https://now-spotify.CHANGE-ME.workers.dev";
 
   function loadListening() {
-    if (SPOTIFY_URL.indexOf("CHANGE-ME") !== -1) return;
+    if (SPOTIFY_URL.indexOf("CHANGE-ME") !== -1) { renderListen(null); return; }
     fetch(SPOTIFY_URL, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) { renderListen(d); })
