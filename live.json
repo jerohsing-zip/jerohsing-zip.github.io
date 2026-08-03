@@ -1,5 +1,5 @@
 {
-  "fetchedAt": "2026-08-03T11:13:05.864Z",
+  "fetchedAt": "2026-08-03T13:48:57.729Z",
   "location": {
     "city": "Tokyo",
     "region": "Japan",
@@ -7,14 +7,14 @@
     "updatedAt": "2026-08-03T01:51:21.145Z"
   },
   "listening": {
-    "title": "Bonfire",
-    "artist": "Childish Gambino",
-    "album": "Camp",
-    "art": "https://i.scdn.co/image/ab67616d0000b27307b664d364bdc214477ee9aa",
-    "url": "https://open.spotify.com/track/2mUye3yqpVYBYLuwmpSEzo",
-    "nowPlaying": true,
-    "period": null,
-    "at": "2026-08-03T11:13:05.863Z"
+    "title": "Never Not",
+    "artist": "LAUV",
+    "album": "I met you when I was 18. (the playlist)",
+    "art": "https://i.scdn.co/image/ab67616d0000b2739ed5fcf212f05d55b1e61eae",
+    "url": "https://open.spotify.com/track/1MaQMMOR80DNUWVBM7L9fz",
+    "nowPlaying": false,
+    "period": "week",
+    "at": null
   },
   "playing": null,
   "shipping": {
