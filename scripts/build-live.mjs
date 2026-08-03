@@ -1,7 +1,8 @@
 /* ============================================================
    build-live.mjs — the scheduled snapshot.
-   Fetches Spotify / Steam / PSN / GitHub with secrets (env vars)
+   Fetches Steam / PSN / GitHub with secrets (env vars)
    and writes now/live.json for the static site to read.
+   listening comes from the now-spotify Worker; see worker/README.md.
 
    Design: each source is fetched independently (Promise.allSettled),
    so one failing never breaks the others. On any failure the previous
@@ -25,43 +26,6 @@ const LOCATION = join(ROOT, "location.json");
 const now = () => new Date().toISOString();
 
 function readJson(p) { try { return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null; } catch { return null; } }
-
-/* ---------- Spotify: now-playing, else most-played track this week ---------- */
-function spotifyTrack(item, nowPlaying, period) {
-  return {
-    title: item.name,
-    artist: (item.artists || []).map((a) => a.name).join(", "),
-    album: item.album && item.album.name,
-    art: item.album && item.album.images && item.album.images[0] ? item.album.images[0].url : null,
-    url: item.external_urls && item.external_urls.spotify,
-    nowPlaying: !!nowPlaying,
-    period: period || null,
-    at: nowPlaying ? now() : null
-  };
-}
-async function spotify() {
-  const id = process.env.SPOTIFY_CLIENT_ID, secret = process.env.SPOTIFY_CLIENT_SECRET, refresh = process.env.SPOTIFY_REFRESH_TOKEN;
-  if (!id || !secret || !refresh) return null;
-  const tok = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + Buffer.from(id + ":" + secret).toString("base64") },
-    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh })
-  });
-  if (!tok.ok) throw new Error("spotify token " + tok.status);
-  const auth = { Authorization: "Bearer " + (await tok.json()).access_token };
-
-  const np = await fetch("https://api.spotify.com/v1/me/player/currently-playing", { headers: auth });
-  if (np.status === 200) {
-    const j = await np.json();
-    if (j && j.item) return spotifyTrack(j.item, true);
-  }
-  const top = await fetch("https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=1", { headers: auth });
-  if (top.ok) {
-    const j = await top.json();
-    if (j.items && j.items[0]) return spotifyTrack(j.items[0], false, "week");
-  }
-  return null;
-}
 
 /* ---------- Steam: most-played game in the last 2 weeks ---------- */
 async function steam() {
@@ -149,11 +113,10 @@ function pickPlaying(steamG, psnG) {
 
 async function main() {
   const prev = readJson(OUT) || {};
-  const results = await Promise.allSettled([spotify(), steam(), psn(), github()]);
-  const [sp, st, ps, gh] = results;
+  const results = await Promise.allSettled([steam(), psn(), github()]);
+  const [st, ps, gh] = results;
   const val = (r) => (r.status === "fulfilled" ? r.value : null);
 
-  const listening = val(sp) || prev.listening || null;
   const playing = pickPlaying(val(st), val(ps)) || prev.playing || null;
   const shipping = val(gh) || prev.shipping || null;
 
@@ -161,12 +124,11 @@ async function main() {
     // location.json is the source of truth (written by update-location.mjs);
     // mirrored here purely as a fallback for when location.json fails to load.
     location: readJson(LOCATION) || prev.location || undefined,
-    listening,
     playing,
     shipping
   };
 
-  [["spotify", sp], ["steam", st], ["psn", ps], ["github", gh]].forEach(([name, r]) => {
+  [["steam", st], ["psn", ps], ["github", gh]].forEach(([name, r]) => {
     if (r.status === "rejected") console.warn(`[${name}] failed:`, (r.reason && r.reason.message) || r.reason);
     else if (r.value == null) console.log(`[${name}] no data (skipped or empty)`);
     else console.log(`[${name}] ok`);
@@ -184,15 +146,10 @@ async function main() {
   console.log("wrote " + OUT);
 }
 
-/* The comparable part of a snapshot: everything except timestamps that move on
-   their own. A now-playing track restamps `at` every run, and the page doesn't
-   render it in that state anyway (the stamp reads "now" — app.js renderListen),
-   so comparing it would reintroduce the same 20-minute churn. */
+/* The comparable part of a snapshot. Listening lives in the Worker now, so
+   nothing here restamps itself between runs. */
 function pick(o) {
-  const listening = o.listening && o.listening.nowPlaying
-    ? { ...o.listening, at: null }
-    : o.listening;
-  return { location: o.location, listening, playing: o.playing, shipping: o.shipping };
+  return { location: o.location, playing: o.playing, shipping: o.shipping };
 }
 
 /* stable stringify — key order must not decide whether we commit */

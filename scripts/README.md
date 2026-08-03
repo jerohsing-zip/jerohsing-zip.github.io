@@ -1,8 +1,11 @@
 # Live snapshot pipeline
 
 A scheduled **GitHub Action** (`.github/workflows/live.yml`) runs `build-live.mjs`
-every ~20 minutes. It fetches your Spotify / Steam / PSN / GitHub activity using
+every ~20 minutes. It fetches your Steam / PSN / GitHub activity using
 secrets, writes `live.json`, and commits it. The static site reads that file.
+
+Listening data no longer comes from here — it's served live by the `now-spotify`
+Cloudflare Worker (`worker/`) and polled directly by `app.js`. See `worker/README.md`.
 
 A second workflow (`.github/workflows/location.yml`) keeps `location.json` current
 from a phone ping — see [SHORTCUT.md](../SHORTCUT.md).
@@ -35,28 +38,12 @@ Add **Secrets**:
 
 | Secret | Where to get it |
 |---|---|
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Create an app at **developer.spotify.com/dashboard** |
-| `SPOTIFY_REFRESH_TOKEN` | Run the helper (below) |
 | `STEAM_API_KEY` | **steamcommunity.com/dev/apikey** |
 | `STEAM_ID` | Your **SteamID64** (17 digits — e.g. from steamid.io). Profile + game details must be **Public**. |
 | `PSN_NPSSO` | *(optional)* Log into **playstation.com**, then open **ca.account.sony.com/api/v1/ssocookie** and copy the `npsso` value. Leave unset to skip PSN. |
 
-### Spotify refresh token
-
-```bash
-cd scripts
-npm install
-SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy node spotify-auth.mjs
-```
-
-Follow the two printed steps (add the redirect URI `http://127.0.0.1:8888/callback`
-in your Spotify app settings — **exactly**, no trailing slash, `127.0.0.1` not
-`localhost` — then open the consent URL). It prints `SPOTIFY_REFRESH_TOKEN` — paste
-that into the repo secret.
-
-The redirect URI is only used for this one-time consent. The Action refreshes tokens
-with `grant_type=refresh_token`, which involves no browser and no redirect, so the
-same app works unchanged in CI.
+Spotify credentials live in the `now-spotify` Worker's own secrets (`wrangler
+secret put`), not here — see `worker/README.md`.
 
 ## 3. Check what's actually wired
 

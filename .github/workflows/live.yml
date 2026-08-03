@@ -1,6 +1,6 @@
 name: live snapshot
 
-# Refreshes live.json from Spotify / Steam / PSN / GitHub on a schedule.
+# Refreshes live.json from Steam / PSN / GitHub on a schedule.
 # Runs ONLY on a timer + manual trigger (never on push), so it can't loop on
 # its own commits — no [skip ci] marker needed, and leaving it off keeps the
 # Pages rebuild from being suppressed.
@@ -33,9 +33,6 @@ jobs:
       - name: Build live.json
         run: node scripts/build-live.mjs
         env:
-          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
-          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
-          SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
           STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
           STEAM_ID: ${{ secrets.STEAM_ID }}
           PSN_NPSSO: ${{ secrets.PSN_NPSSO }}

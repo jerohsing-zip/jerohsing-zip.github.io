@@ -6,16 +6,6 @@
     "tz": "Asia/Tokyo",
     "updatedAt": "2026-08-03T01:51:21.145Z"
   },
-  "listening": {
-    "title": "Caravan",
-    "artist": "John Wasson",
-    "album": "Whiplash (Original Motion Picture Soundtrack)",
-    "art": "https://i.scdn.co/image/ab67616d0000b2736fce4a71d3973d3bbb12e8d7",
-    "url": "https://open.spotify.com/track/2Xtsv7BUMrNodQWH2JPOc0",
-    "nowPlaying": true,
-    "period": null,
-    "at": "2026-08-03T07:51:04.530Z"
-  },
   "playing": null,
   "shipping": {
     "type": "push",
