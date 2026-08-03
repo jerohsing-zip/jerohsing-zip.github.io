@@ -8,6 +8,9 @@
    value for that signal is preserved (last-known), so a transient
    outage never blanks the page. PSN is optional and the most fragile.
 
+   The file is only rewritten when a signal actually changed — this runs
+   every 20 minutes, and an unconditional write meant a commit every run.
+
    Run:  node scripts/build-live.mjs      (needs env vars; see README)
    Node 18+ (uses global fetch). ESM.
    ============================================================ */
@@ -154,8 +157,7 @@ async function main() {
   const playing = pickPlaying(val(st), val(ps)) || prev.playing || null;
   const shipping = val(gh) || prev.shipping || null;
 
-  const out = {
-    fetchedAt: now(),
+  const signals = {
     // location.json is the source of truth (written by update-location.mjs);
     // mirrored here purely as a fallback for when location.json fails to load.
     location: readJson(LOCATION) || prev.location || undefined,
@@ -163,14 +165,42 @@ async function main() {
     playing,
     shipping
   };
-  writeFileSync(OUT, JSON.stringify(out, null, 2) + "\n");
 
   [["spotify", sp], ["steam", st], ["psn", ps], ["github", gh]].forEach(([name, r]) => {
     if (r.status === "rejected") console.warn(`[${name}] failed:`, (r.reason && r.reason.message) || r.reason);
     else if (r.value == null) console.log(`[${name}] no data (skipped or empty)`);
     else console.log(`[${name}] ok`);
   });
+
+  /* Only write when a signal actually changed. fetchedAt alone moves on every run,
+     and this runs every 20 minutes — writing unconditionally meant the workflow
+     committed every single time, ~2000 commits a month of pure noise.
+     So fetchedAt means "when the data last changed", which is also what the page's
+     "updated Xm ago" should be saying. */
+  const same = existsSync(OUT) && stable(pick(signals)) === stable(pick(prev));
+  if (same) { console.log("no change — " + OUT + " left alone"); return; }
+
+  writeFileSync(OUT, JSON.stringify({ fetchedAt: now(), ...signals }, null, 2) + "\n");
   console.log("wrote " + OUT);
+}
+
+/* The comparable part of a snapshot: everything except timestamps that move on
+   their own. A now-playing track restamps `at` every run, and the page doesn't
+   render it in that state anyway (the stamp reads "now" — app.js renderListen),
+   so comparing it would reintroduce the same 20-minute churn. */
+function pick(o) {
+  const listening = o.listening && o.listening.nowPlaying
+    ? { ...o.listening, at: null }
+    : o.listening;
+  return { location: o.location, listening, playing: o.playing, shipping: o.shipping };
+}
+
+/* stable stringify — key order must not decide whether we commit */
+function stable(v) {
+  if (v === null || typeof v !== "object") return JSON.stringify(v ?? null);
+  if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
+  return "{" + Object.keys(v).sort().filter((k) => v[k] !== undefined)
+    .map((k) => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}";
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

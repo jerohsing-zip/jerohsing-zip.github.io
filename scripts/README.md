@@ -96,7 +96,14 @@ node --env-file=.env build-live.mjs
 ```
 
 Running with no credentials is safe: every source returns "no data", the previous
-`live.json` values are preserved, and only `fetchedAt` updates.
+`live.json` values are preserved, and the file is left untouched.
+
+`live.json` is only rewritten when a **signal** actually changes. Because the
+workflow runs every 20 minutes, bumping `fetchedAt` on every run would mean a commit
+every 20 minutes — ~2,000/month of noise. So `fetchedAt` means *"when the data last
+changed"*, which is also what the page's "updated Xm ago" is really saying. A
+now-playing track's `at` is excluded from that comparison (it restamps every run and
+isn't rendered while playing), so a single song doesn't churn the file either.
 
 Keep `.env` out of git. The bare `.env` pattern in `.gitignore` matches at any depth,
 so `scripts/.env` is covered — confirm before your first commit:

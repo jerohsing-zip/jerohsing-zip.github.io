@@ -1,12 +1,27 @@
 {
-  "fetchedAt": "2026-08-03T03:52:45.163Z",
+  "fetchedAt": "2026-08-03T05:14:31.592Z",
   "location": {
-    "city": "Los Angeles",
-    "region": "California",
-    "tz": "America/Los_Angeles",
+    "city": "Tokyo",
+    "region": "Asia",
+    "tz": "Asia/Tokyo",
     "updatedAt": "2026-08-03T01:51:21.145Z"
   },
-  "listening": null,
+  "listening": {
+    "title": "i wish you were here",
+    "artist": "Q",
+    "album": "i wish you were here",
+    "art": "https://i.scdn.co/image/ab67616d0000b27376dd7330817ab603c2ec1ad7",
+    "url": "https://open.spotify.com/track/4da08w8PKJ0bJIh7nAmgJM",
+    "nowPlaying": true,
+    "period": null,
+    "at": "2026-08-03T05:14:31.256Z"
+  },
   "playing": null,
-  "shipping": null
+  "shipping": {
+    "type": "create",
+    "repo": "jerohsing-zip/jerohsing-zip.github.io",
+    "message": "created branch",
+    "url": "https://github.com/jerohsing-zip/jerohsing-zip.github.io",
+    "at": "2026-08-03T04:18:46Z"
+  }
 }
