@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getAccessToken, __testing } from "../src/spotify.js";
+import { getAccessToken, getTrack, __testing } from "../src/spotify.js";
 
 const ENV = {
   SPOTIFY_CLIENT_ID: "test-id",
@@ -75,5 +75,117 @@ describe("getAccessToken", () => {
     await expect(getAccessToken(ENV)).rejects.toThrow(
       /400.*invalid_grant.*Invalid refresh token/
     );
+  });
+});
+
+const TOKEN_OK = { access_token: "access-1", expires_in: 3600 };
+
+const TRACK = {
+  type: "track",
+  name: "Caravan",
+  artists: [{ name: "John Wasson" }, { name: "Studio Band" }],
+  album: {
+    name: "Whiplash (Original Motion Picture Soundtrack)",
+    images: [{ url: "https://i.scdn.co/image/big" }, { url: "https://i.scdn.co/image/small" }]
+  },
+  external_urls: { spotify: "https://open.spotify.com/track/abc" }
+};
+
+/* Routes stubbed fetch by URL so each test states only what it cares about. */
+function stubSpotify({ current, recent }) {
+  const fetchMock = vi.fn(async (url) => {
+    const u = String(url);
+    if (u.includes("/api/token")) return jsonResponse(TOKEN_OK);
+    if (u.includes("currently-playing")) return current();
+    if (u.includes("recently-played")) return recent();
+    throw new Error("unexpected fetch: " + u);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+const noRecent = () => jsonResponse({ items: [] });
+
+describe("getTrack", () => {
+  it("returns the currently playing track", async () => {
+    stubSpotify({
+      current: () => jsonResponse({ is_playing: true, item: TRACK }),
+      recent: noRecent
+    });
+
+    const t = await getTrack(ENV);
+    expect(t).toMatchObject({
+      title: "Caravan",
+      artist: "John Wasson, Studio Band",
+      album: "Whiplash (Original Motion Picture Soundtrack)",
+      art: "https://i.scdn.co/image/big",
+      url: "https://open.spotify.com/track/abc",
+      nowPlaying: true,
+      period: null
+    });
+    expect(Date.parse(t.at)).not.toBeNaN();
+    expect(Object.keys(t).sort()).toEqual(
+      ["album", "art", "artist", "at", "nowPlaying", "period", "title", "url"]
+    );
+  });
+
+  it("falls back to the last played track on 204", async () => {
+    stubSpotify({
+      current: () => new Response(null, { status: 204 }),
+      recent: () =>
+        jsonResponse({ items: [{ track: TRACK, played_at: "2026-08-03T07:00:00.000Z" }] })
+    });
+
+    expect(await getTrack(ENV)).toMatchObject({
+      title: "Caravan",
+      nowPlaying: false,
+      period: "recent",
+      at: "2026-08-03T07:00:00.000Z"
+    });
+  });
+
+  it("treats a paused track as not playing and falls back", async () => {
+    stubSpotify({
+      current: () => jsonResponse({ is_playing: false, item: TRACK }),
+      recent: () =>
+        jsonResponse({ items: [{ track: TRACK, played_at: "2026-08-03T07:00:00.000Z" }] })
+    });
+
+    expect(await getTrack(ENV)).toMatchObject({ nowPlaying: false, period: "recent" });
+  });
+
+  it("treats a podcast episode as nothing playing and falls back", async () => {
+    stubSpotify({
+      current: () =>
+        jsonResponse({ is_playing: true, item: { type: "episode", name: "Some Show" } }),
+      recent: () =>
+        jsonResponse({ items: [{ track: TRACK, played_at: "2026-08-03T07:00:00.000Z" }] })
+    });
+
+    expect(await getTrack(ENV)).toMatchObject({ title: "Caravan", nowPlaying: false });
+  });
+
+  it("returns null when nothing is playing and there is no history", async () => {
+    stubSpotify({ current: () => new Response(null, { status: 204 }), recent: noRecent });
+    expect(await getTrack(ENV)).toBeNull();
+  });
+
+  it("survives a track with no album art", async () => {
+    const bare = { ...TRACK, album: { name: "X", images: [] }, external_urls: {} };
+    stubSpotify({
+      current: () => jsonResponse({ is_playing: true, item: bare }),
+      recent: noRecent
+    });
+
+    expect(await getTrack(ENV)).toMatchObject({ art: null, url: null, album: "X" });
+  });
+
+  it("throws when recently-played is forbidden (missing scope)", async () => {
+    stubSpotify({
+      current: () => new Response(null, { status: 204 }),
+      recent: () => jsonResponse({ error: { status: 403 } }, 403)
+    });
+
+    await expect(getTrack(ENV)).rejects.toThrow(/recently-played 403/);
   });
 });

@@ -48,3 +48,54 @@ export async function getAccessToken(env) {
   };
   return tokenCache.token;
 }
+
+const API = "https://api.spotify.com/v1";
+
+/* The exact field set app.js renders. Nothing more — the page is the
+   only consumer and extra fields would just be dead weight on the wire. */
+function toTrack(item, { nowPlaying, period, at }) {
+  const album = item.album || {};
+  const images = album.images || [];
+  return {
+    title: item.name,
+    artist: (item.artists || []).map((a) => a.name).join(", "),
+    album: album.name || null,
+    art: images.length ? images[0].url : null,
+    url: (item.external_urls || {}).spotify || null,
+    nowPlaying,
+    period,
+    at
+  };
+}
+
+async function currentlyPlaying(auth) {
+  const res = await fetch(API + "/me/player/currently-playing", { headers: auth });
+  if (res.status === 204) return null;                  // nothing active
+  if (!res.ok) throw new Error("spotify currently-playing " + res.status);
+
+  const j = await res.json().catch(() => null);
+  if (!j || !j.item || !j.is_playing) return null;      // paused counts as not playing
+  if (j.item.type && j.item.type !== "track") return null;  // podcasts aren't music
+
+  return toTrack(j.item, { nowPlaying: true, period: null, at: new Date().toISOString() });
+}
+
+async function recentlyPlayed(auth) {
+  const res = await fetch(API + "/me/player/recently-played?limit=1", { headers: auth });
+  if (!res.ok) throw new Error("spotify recently-played " + res.status);
+
+  const j = await res.json().catch(() => null);
+  const item = j && j.items && j.items[0];
+  if (!item || !item.track) return null;
+
+  return toTrack(item.track, {
+    nowPlaying: false,
+    period: "recent",
+    at: item.played_at || null
+  });
+}
+
+export async function getTrack(env) {
+  const auth = { Authorization: "Bearer " + (await getAccessToken(env)) };
+  return (await currentlyPlaying(auth)) || (await recentlyPlayed(auth));
+}
