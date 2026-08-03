@@ -1,0 +1,70 @@
+name: location
+
+# Updates location.json when a phone pings it. Triggered by a
+# repository_dispatch from an iOS Shortcut (see SHORTCUT.md), or by hand
+# from the Actions tab. Never runs on push, so it can't loop on its own
+# commit — which is also why the commit carries no [skip ci] marker: that
+# marker can suppress the Pages rebuild, and the site would go stale.
+on:
+  repository_dispatch:
+    types: [location]
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "City, e.g. Los Angeles"
+        required: true
+      region:
+        description: "State / region, e.g. California"
+        required: false
+      lat:
+        description: "Latitude (used once to resolve the timezone, never stored)"
+        required: false
+      lon:
+        description: "Longitude (used once to resolve the timezone, never stored)"
+        required: false
+
+permissions:
+  contents: write             # needed to commit the updated location.json
+
+concurrency:
+  group: location
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # no npm install — update-location.mjs has no dependencies
+
+      # The payload is passed as env vars, never interpolated into the shell —
+      # `${{ }}` inside a run: block would let a crafted city name inject commands.
+      # `github.event.inputs` (rather than the `inputs` context) is used because the
+      # latter is only populated on workflow_dispatch, not repository_dispatch.
+      - name: Update location.json
+        env:
+          LOC_CITY: ${{ github.event.client_payload.city || github.event.inputs.city }}
+          LOC_REGION: ${{ github.event.client_payload.region || github.event.inputs.region }}
+          LOC_LAT: ${{ github.event.client_payload.lat || github.event.inputs.lat }}
+          LOC_LON: ${{ github.event.client_payload.lon || github.event.inputs.lon }}
+        run: node scripts/update-location.mjs
+
+      - name: Commit if changed
+        run: |
+          git config user.name "live-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add location.json
+          if git diff --cached --quiet; then
+            echo "no change"
+          else
+            # read the city back from the file rather than the payload — no
+            # untrusted text reaches the shell
+            CITY=$(node -p "require('./location.json').city")
+            git commit -m "chore: location -> $CITY"
+            git push
+          fi

@@ -1,0 +1,15 @@
+{
+  "name": "now-live-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scheduled snapshot: fetches Spotify/Steam/PSN/GitHub and writes live.json",
+  "scripts": {
+    "build": "node build-live.mjs",
+    "check": "node --env-file=.env check-secrets.mjs",
+    "spotify-auth": "node spotify-auth.mjs"
+  },
+  "dependencies": {
+    "psn-api": "^2.13.0"
+  }
+}
