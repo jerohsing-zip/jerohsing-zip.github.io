@@ -125,3 +125,72 @@ describe("worker fetch", () => {
     expect(res.status).toBe(405);
   });
 });
+
+describe("edge cache", () => {
+  // A non-zero TTL, used only here so these tests can actually exercise the
+  // cache-hit path (../src/index.js's `if (ttl > 0)` branches). Every other
+  // test in this file keeps CACHE_TTL "0" so the shared Cache API instance
+  // can't leak state between them; these tests instead isolate themselves
+  // with unique request URLs, since the cache key is derived from the URL.
+  const CACHE_ENV = { ...ENV, CACHE_TTL: "5" };
+
+  async function callWithEnv(request, env) {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(request, env, ctx);
+    await waitOnExecutionContext(ctx);
+    return res;
+  }
+
+  it("serves a cache hit re-stamped with the current caller's CORS header, without hitting Spotify again", async () => {
+    const url = "https://cache-test-restamp.example.workers.dev/";
+
+    stubPlaying();
+    const first = await callWithEnv(
+      new Request(url, { headers: { Origin: SITE } }),
+      CACHE_ENV
+    );
+    expect(first.status).toBe(200);
+    expect(first.headers.get("Access-Control-Allow-Origin")).toBe(SITE);
+
+    // Prove the second response comes from cache, not a fresh upstream call:
+    // any call to the stubbed global fetch here fails the test outright.
+    const fetchSpy = vi.fn(async () => {
+      throw new Error("must not hit the network on a cache hit");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const second = await callWithEnv(
+      new Request(url, { headers: { Origin: "http://localhost:4000" } }),
+      CACHE_ENV
+    );
+
+    expect(second.status).toBe(200);
+    expect(await second.json()).toMatchObject({ title: "Caravan" });
+    // The re-stamp must reflect the *second* caller's origin, never the
+    // first caller's — a cached response is shared across all origins.
+    expect(second.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:4000");
+    expect(second.headers.get("Access-Control-Allow-Origin")).not.toBe(SITE);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("omits the CORS header on a cache hit for an unknown origin, never leaking the original caller's origin", async () => {
+    const url = "https://cache-test-unknown-origin.example.workers.dev/";
+
+    stubPlaying();
+    await callWithEnv(new Request(url, { headers: { Origin: SITE } }), CACHE_ENV);
+
+    const fetchSpy = vi.fn(async () => {
+      throw new Error("must not hit the network on a cache hit");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const res = await callWithEnv(
+      new Request(url, { headers: { Origin: "https://evil.example.com" } }),
+      CACHE_ENV
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
