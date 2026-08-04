@@ -6,16 +6,6 @@
     "tz": "Asia/Taipei",
     "updatedAt": "2026-08-04T10:41:21.145Z"
   },
-  "listening": {
-    "title": "Never Not",
-    "artist": "LAUV",
-    "album": "I met you when I was 18. (the playlist)",
-    "art": "https://i.scdn.co/image/ab67616d0000b2739ed5fcf212f05d55b1e61eae",
-    "url": "https://open.spotify.com/track/1MaQMMOR80DNUWVBM7L9fz",
-    "nowPlaying": false,
-    "period": "week",
-    "at": null
-  },
   "playing": null,
   "shipping": {
     "type": "push",

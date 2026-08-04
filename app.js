@@ -149,7 +149,8 @@ import { createSky } from "./sky.js";
     if (row) row.classList.remove("sig--empty");
     setText("[data-listen-title]", d.title); setText("[data-listen-artist]", d.artist || "");
     if (art && d.art) { art.style.backgroundImage = 'url("' + d.art + '")'; art.classList.add("has-art"); }
-    setText('[data-stamp="listen"]', d.nowPlaying ? "now" : (d.period === "week" ? "top this week" : ago(d.at)));
+    else if (art) { art.style.backgroundImage = ""; art.classList.remove("has-art"); }
+    setText('[data-stamp="listen"]', d.nowPlaying ? "now" : ago(d.at));
   }
   function renderPlay(d) {
     var row = $('[data-sig="play"]');
@@ -179,8 +180,26 @@ import { createSky } from "./sky.js";
     el.textContent = iso ? "updated " + ago(iso) : "last-known data";
   }
   function renderSignals(data) {
-    renderListen(data.listening); renderPlay(data.playing);
+    /* listening deliberately absent — the Worker owns it (loadListening) */
+    renderPlay(data.playing);
     renderShip(data.shipping); renderFresh(data.fetchedAt);
+  }
+
+  /* ---------- listening (live) ----------
+     Owned entirely by the now-spotify Worker, not by live.json — a track
+     changes every few minutes and the 20-minute cron could never keep up.
+     Paste the deployed Worker URL here; see worker/README.md step 7.
+     Left as the placeholder, the card just keeps its static HTML. */
+  var SPOTIFY_URL = "https://now-spotify.jerohsing.workers.dev";
+
+  function loadListening() {
+    if (SPOTIFY_URL.indexOf("CHANGE-ME") !== -1) { renderListen(null); return; }
+    fetch(SPOTIFY_URL, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { renderListen(d); })
+      /* A failed fetch leaves the previous render alone. Showing
+         "quiet right now" because the Worker is down would be a lie. */
+      .catch(function () {});
   }
 
   /* ---------- data ----------
@@ -298,6 +317,8 @@ import { createSky } from "./sky.js";
   setInterval(tick, 1000);
   load();
   setInterval(load, 180000);  // re-poll snapshot every 3 min
+  loadListening();
+  setInterval(loadListening, 30000);   // now-playing, straight from the Worker
   loadWeather();
   setInterval(loadWeather, 900000);  // refresh weather every 15 min
   entrance();

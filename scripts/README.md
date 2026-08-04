@@ -1,8 +1,11 @@
 # Live snapshot pipeline
 
 A scheduled **GitHub Action** (`.github/workflows/live.yml`) runs `build-live.mjs`
-every ~20 minutes. It fetches your Spotify / Steam / PSN / GitHub activity using
+every ~20 minutes. It fetches your Steam / PSN / GitHub activity using
 secrets, writes `live.json`, and commits it. The static site reads that file.
+
+Listening data no longer comes from here — it's served live by the `now-spotify`
+Cloudflare Worker (`worker/`) and polled directly by `app.js`. See `worker/README.md`.
 
 A second workflow (`.github/workflows/location.yml`) keeps `location.json` current
 from a phone ping — see [SHORTCUT.md](../SHORTCUT.md).
@@ -35,28 +38,12 @@ Add **Secrets**:
 
 | Secret | Where to get it |
 |---|---|
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Create an app at **developer.spotify.com/dashboard** |
-| `SPOTIFY_REFRESH_TOKEN` | Run the helper (below) |
 | `STEAM_API_KEY` | **steamcommunity.com/dev/apikey** |
 | `STEAM_ID` | Your **SteamID64** (17 digits — e.g. from steamid.io). Profile + game details must be **Public**. |
 | `PSN_NPSSO` | *(optional)* Log into **playstation.com**, then open **ca.account.sony.com/api/v1/ssocookie** and copy the `npsso` value. Leave unset to skip PSN. |
 
-### Spotify refresh token
-
-```bash
-cd scripts
-npm install
-SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy node spotify-auth.mjs
-```
-
-Follow the two printed steps (add the redirect URI `http://127.0.0.1:8888/callback`
-in your Spotify app settings — **exactly**, no trailing slash, `127.0.0.1` not
-`localhost` — then open the consent URL). It prints `SPOTIFY_REFRESH_TOKEN` — paste
-that into the repo secret.
-
-The redirect URI is only used for this one-time consent. The Action refreshes tokens
-with `grant_type=refresh_token`, which involves no browser and no redirect, so the
-same app works unchanged in CI.
+Spotify credentials live in the `now-spotify` Worker's own secrets (`wrangler
+secret put`), not here — see `worker/README.md`.
 
 ## 3. Check what's actually wired
 
@@ -101,9 +88,10 @@ Running with no credentials is safe: every source returns "no data", the previou
 `live.json` is only rewritten when a **signal** actually changes. Because the
 workflow runs every 20 minutes, bumping `fetchedAt` on every run would mean a commit
 every 20 minutes — ~2,000/month of noise. So `fetchedAt` means *"when the data last
-changed"*, which is also what the page's "updated Xm ago" is really saying. A
-now-playing track's `at` is excluded from that comparison (it restamps every run and
-isn't rendered while playing), so a single song doesn't churn the file either.
+changed"*, which is also what the page's "updated Xm ago" is really saying.
+`pick()` compares only `location`, `playing`, and `shipping` — listening now lives
+entirely in the now-spotify Worker (see `worker/README.md`), never in this file, so
+it plays no part in the comparison at all.
 
 Keep `.env` out of git. The bare `.env` pattern in `.gitignore` matches at any depth,
 so `scripts/.env` is covered — confirm before your first commit:

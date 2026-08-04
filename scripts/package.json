@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Scheduled snapshot: fetches Spotify/Steam/PSN/GitHub and writes live.json",
+  "description": "Scheduled snapshot: fetches Steam/PSN/GitHub and writes live.json (listening is served live by the now-spotify Worker)",
   "scripts": {
     "build": "node build-live.mjs",
     "check": "node --env-file=.env check-secrets.mjs",

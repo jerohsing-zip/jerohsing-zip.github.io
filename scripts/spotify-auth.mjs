@@ -5,7 +5,7 @@
 
    Usage:
      SPOTIFY_CLIENT_ID=xxx SPOTIFY_CLIENT_SECRET=yyy node scripts/spotify-auth.mjs
-   Then paste the printed token into the SPOTIFY_REFRESH_TOKEN repo secret.
+   Then set the printed token on the Worker: cd worker && npx wrangler secret put SPOTIFY_REFRESH_TOKEN
    ============================================================ */
 import http from "node:http";
 
@@ -13,7 +13,9 @@ import http from "node:http";
 const id = process.env.SPOTIFY_CLIENT_ID, secret = process.env.SPOTIFY_CLIENT_SECRET;
 const PORT = 8888;
 const REDIRECT = `http://127.0.0.1:${PORT}/callback`;
-const SCOPE = "user-read-currently-playing user-top-read";
+/* user-read-recently-played powers the "last played" fallback in worker/.
+   user-top-read is gone with build-live.mjs's top-tracks fallback. */
+const SCOPE = "user-read-currently-playing user-read-recently-played";
 
 if (!id || !secret) {
   console.error("Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET env vars first.");
@@ -38,7 +40,7 @@ const server = http.createServer(async (req, res) => {
     const j = await tok.json();
     if (j.refresh_token) {
       res.end("Success. You can close this tab; the refresh token is printed in your terminal.");
-      console.log("\n=== SPOTIFY_REFRESH_TOKEN ===\n" + j.refresh_token + "\n=============================\nAdd this as a repo secret. Done.\n");
+      console.log("\n=== SPOTIFY_REFRESH_TOKEN ===\n" + j.refresh_token + "\n=============================\nSet it on the Worker:\n  cd worker && npx wrangler secret put SPOTIFY_REFRESH_TOKEN\nPaste the token alone — no quotes, no trailing comment.\n");
     } else {
       res.end("Failed: " + JSON.stringify(j));
       console.error("Token exchange failed:", j);
