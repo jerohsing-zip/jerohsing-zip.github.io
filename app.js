@@ -190,7 +190,7 @@ import { createSky } from "./sky.js";
      changes every few minutes and the 20-minute cron could never keep up.
      Paste the deployed Worker URL here; see worker/README.md step 7.
      Left as the placeholder, the card just keeps its static HTML. */
-  var SPOTIFY_URL = "https://now-spotify.CHANGE-ME.workers.dev";
+  var SPOTIFY_URL = "https://now-spotify.jerohsing.workers.dev";
 
   function loadListening() {
     if (SPOTIFY_URL.indexOf("CHANGE-ME") !== -1) { renderListen(null); return; }
