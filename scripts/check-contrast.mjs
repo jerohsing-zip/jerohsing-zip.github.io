@@ -3,8 +3,8 @@
    tokens, then checks the fixed paper surfaces.
    Run: node scripts/check-contrast.mjs */
 import {
-  tokensFor, contrast, relLum, washRoom, washGain, bandGrounds, orderByHue,
-  stripI, stripPeak, LIGHT, BAND_ALPHA, WASH
+  tokensFor, contrast, relLum, washRoom, bandGrounds, orderByHue,
+  stripI, stripPeak, LIGHT, BAND_ALPHA
 } from "../light.js";
 
 const BODY = 4.5;      // WCAG AA, normal text
@@ -88,70 +88,82 @@ for (const [name, fg, bg, min] of pairs) {
   if (c < min) bad(`${name} = ${c.toFixed(2)}:1, needs ${min}`);
 }
 
-/* ---- the album wash must not be able to break the room ----
-   The wash now carries a daylight gain — a tint calibrated for the night is
-   invisible at noon — so the sleeve pushes hardest exactly when the room is
-   brightest. washRoom() mirrors the shader's maths, and the sleeves below are
-   the corners of the colour cube: no real cover can push further than these.
+/* ---- the record's lean must not be able to break the room ----
+   The wash is no longer weather in the air; it is a flat, motionless lean of
+   the walls toward the sleeve's hue, with the strip carrying the record's
+   actual presence. So what has to hold here is narrower than it was: the lean
+   may not drive the room out of range, and it may not bleach it.
 
-   The band is derived from the unwashed room by design; the wash lands behind
-   the band, where bandGrounds() has already bounded it by black and white. So
-   what has to hold here is narrower and checkable: the wash may not drive the
-   room out of range, and it may not bleach the room to grey or to white. */
+   The band is derived from the unwashed room by design, and the lean lands
+   behind the band where bandGrounds() has already bounded it by black and
+   white — so text legibility is not at stake here, only the room's own health.
+
+   These sleeves are the corners of the colour cube: no real cover pushes
+   further. The achromatic corner is included because it must be a no-op, not
+   because a cover like it would ever reach here — signals.js refuses those at
+   chroma < 0.05. */
 const SLEEVES = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [0, 1, 1], [1, 0, 1], [1, 1, 1], [.04, .04, .04]];
 
+/* A complementary sleeve desaturates the wall, because that is what
+   complementary light does — the rose room at civil twilight under a green
+   cast goes nearly neutral, and it should. So the claim here is relative
+   rather than absolute: the lean may take colour out of the room, it may not
+   take most of it.
+
+   SAT_FLOOR stays where it belongs, on the unwashed room. That guards the
+   walls as a material, and a material's colour is not the light's to erase.
+   This bound guards how far the light may reach instead.
+
+   Worst observed retention is 0.250 — a pure green sleeve against the rose
+   room at civil twilight, exact complements, at a corner of the colour cube
+   that no real cover reaches. The floor is set below that with margin, and
+   the corners are deliberately a harder test than anything that can ship. */
+const RETENTION_FLOOR = 0.20;
+let worstRet = Infinity, atRet = "";
+
 for (const alt of ALTS) for (const cloud of CLOUDS) {
-  const t = tokensFor(alt, cloud);
-  for (const sleeve of SLEEVES) for (const pool of [WASH.poolMin, 1]) {
-    const w = washRoom(t.room, sleeve, 1, pool, washGain(alt));
-    for (const v of w) if (!isFinite(v) || v < 0) bad(`washed room out of range at ${alt}°: ${w}`);
+  const room = tokensFor(alt, cloud).room;
+  const s0 = sat(room);
+  for (const sleeve of SLEEVES) {
+    const w = washRoom(room, sleeve, 1);
+    for (const v of w) if (!isFinite(v) || v < 0) bad(`leaned room out of range at ${alt}°: ${w}`);
+    if (s0 > 0) {
+      const ret = sat(w) / s0;
+      if (ret < worstRet) { worstRet = ret; atRet = `sleeve ${sleeve} at ${alt}° / cloud ${cloud}`; }
+    }
   }
 }
+console.log(`lean saturation retention: worst ${worstRet.toFixed(3)} (${atRet}, floor ${RETENTION_FLOOR})`);
+if (worstRet < RETENTION_FLOOR) bad(`the lean bleached the room: retention ${worstRet.toFixed(3)} at ${atRet}`);
 
-/* The record has to stay visible as the sun comes up — the complaint that
-   started this was that daylight simply negated the sleeve. Measured as
-   chromaticity, each channel over the room's own luminance, so it asks how
-   much *colour* the record throws rather than how bright the room got.
+/* The record is never entirely absent from the room. The strip comes and goes
+   with the light, the weather and the scroll — so the lean is what has to be
+   always-on, and "always" is checked at every hour under every sky.
 
-   Two claims, both about the compensation rather than about a colour. Reach
-   itself cannot be barred at a number: the room's hue swings hard through
-   sunrise — rose to orange in a few degrees — and a yellow sleeve against an
-   orange wall is quietly close to a no-op no matter how hard it pushes. That
-   is the room being honest, not the gain failing. */
+   This is the honest successor to the deleted daylight-gain proofs. Those
+   defended a mechanism; this defends the outcome that mechanism existed for.
+   Measured as chromaticity — each channel over the room's own luminance — so
+   it asks how much *colour* the record throws rather than how bright the room
+   got. The achromatic corner is excluded: a grey sleeve normalises to a
+   multiplier of 1 and is a no-op by construction, which is why signals.js
+   refuses those covers upstream rather than sending them here. */
 const chroma = (c) => { const l = Math.max(c[0] * .299 + c[1] * .587 + c[2] * .114, 1e-4); return c.map((v) => v / l); };
-/* Measured where the room actually spends its area. The wash's pool is a noise
-   field that averages near the middle of its range; at pool 1 the tint has
-   already hit WASH.tintMax and the gain has nothing left to give, so measuring
-   there would test the clamp rather than the compensation. */
-const POOL = WASH.poolMin + (1 - WASH.poolMin) * 0.5;
-const reach = (alt, sleeve, gain) => {
-  const room = tokensFor(alt, 0).room;
-  const a = chroma(room), b = chroma(washRoom(room, sleeve, 1, POOL, gain));
+const reach = (alt, cloud, sleeve) => {
+  const room = tokensFor(alt, cloud).room;
+  const a = chroma(room), b = chroma(washRoom(room, sleeve, 1));
   return Math.max(...a.map((v, i) => Math.abs(v - b[i])));
 };
 
-/* 1. Compensation never goes backwards as the room brightens. */
-let lastGain = -Infinity, lastAlt = null;
-for (const alt of ALTS) {
-  const g = washGain(alt);
-  if (g < lastGain - 1e-9) bad(`washGain falls from ${lastGain.toFixed(3)} at ${lastAlt}° to ${g.toFixed(3)} at ${alt}°`);
-  lastGain = g; lastAlt = alt;
-}
-
-/* 2. In real daylight the gain is materially there — the sleeve throws
-   meaningfully more colour than it would have. Below this margin the whole
-   mechanism is a rounding error and the sun has won again. */
-const MARGIN = 1.25;
-let worstLift = Infinity, atLift = "";
+const LEAN_FLOOR = 0.02;
+let worstReach = Infinity, atReach = "";
 for (const sleeve of SLEEVES.slice(0, 6)) {
-  for (const alt of ALTS.filter((a) => a >= 20)) {
-    const lift = reach(alt, sleeve, washGain(alt)) / reach(alt, sleeve, 1);
-    if (lift < worstLift) { worstLift = lift; atLift = `sleeve ${sleeve} at ${alt}°`; }
+  for (const alt of ALTS) for (const cloud of CLOUDS) {
+    const r = reach(alt, cloud, sleeve);
+    if (r < worstReach) { worstReach = r; atReach = `sleeve ${sleeve} at ${alt}° / cloud ${cloud}`; }
   }
 }
-console.log(`wash gain: ${washGain(-6).toFixed(2)}× at night, ${washGain(60).toFixed(2)}× at high sun`);
-console.log(`daylight wash lift: worst ${worstLift.toFixed(2)}× (${atLift})`);
-if (worstLift < MARGIN) bad(`the sun still out-votes the record: only ${worstLift.toFixed(2)}× lift at ${atLift}`);
+console.log(`lean reach: worst ${worstReach.toFixed(3)} (${atReach}, floor ${LEAN_FLOOR})`);
+if (worstReach < LEAN_FLOOR) bad(`the room stops knowing what is playing: reach ${worstReach.toFixed(3)} at ${atReach}`);
 
 const t0 = tokensFor(0, 0);
 if (relLum(t0.band) > 1 || relLum(t0.band) < 0) bad("band luminance out of range");

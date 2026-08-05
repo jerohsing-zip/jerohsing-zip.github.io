@@ -12,7 +12,7 @@ import { animate, stagger, inView } from "./vendor/motion.js";
 import { createRoom } from "./room.js";
 import { solarPosition, albumPalette } from "./signals.js";
 import {
-  tokensFor, windowPos, windowI, tungstenI, washGain,
+  tokensFor, windowPos, windowI, tungstenI,
   TUNGSTEN, BAND_ALPHA, rgb255, rgba255
 } from "./light.js";
 
@@ -84,8 +84,7 @@ import {
         light: t.light,
         room: t.room,
         warm: TUNGSTEN,
-        warmI: tungstenI(alt),
-        washGain: washGain(alt)
+        warmI: tungstenI(alt)
       }, !lightInit);
     }
     lightInit = true;

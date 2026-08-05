@@ -176,45 +176,32 @@ var BAND_LIGHT = 0.62;
    or the proof drifts away from the render. */
 export var BAND_ALPHA = 0.84;
 
+/* The record's standing presence in the room: a flat lean of the walls toward
+   the sleeve's hue. Motionless, and weak enough that it is felt rather than
+   seen — the strip is what the record actually looks like.
+
+   This used to be six constants driving a noise field with a daylight gain
+   bolted on, because a volumetric tint calibrated to read after dark was
+   invisible at noon. There is no longer a volumetric tint, so the whole
+   compensating apparatus went with it. */
 export var WASH = {
-  poolMin: 0.18,     // the record always colours the room a little
-  temper: 0.72,      // how far toward the sleeve's own hue the multiplier goes
-  tint: 0.68,        // strength of the hue shift
-  add: 0.15,         // additive glow, mostly for after dark
-  /* Daylight is simply more light than a record sleeve. A tint calibrated to
-     read after dark all but vanishes at noon — the sun was not negating the
-     wash so much as out-voting it. The wash is given back what the sun takes
-     instead of being made loud at night so it survives the day. */
-  dayGain: 1.85,
-  /* The tint is a mix toward a tinted copy of the room; past 1.0 it would
-     overshoot the sleeve's hue, so 1.0 is the natural stop rather than a
-     tuned one. With the gain applied the product reaches it wherever the
-     noise pools, which is the intended ceiling and not a clipped one. */
-  tintMax: 1.0
+  temper: 0.72,   // how far toward the sleeve's own hue the multiplier goes
+  lean: 0.12      // and how much of that lands
 };
 
-/* How hard the record pushes, given how much light it is pushing against.
-   Keyed on the room's own luminance rather than on the altitude directly:
-   brightness is the thing the sleeve is losing to, so compensating against
-   anything else leaves a band of the morning where the room has already
-   brightened and the wash has not yet been given anything back. */
-export function washGain(alt) {
-  var floor = luma(LIGHT[0].room), ceil = luma(LIGHT[LIGHT.length - 1].room);
-  var k = clamp01((luma(lightAt(alt).room) - floor) / (ceil - floor));
-  return 1 + (WASH.dayGain - 1) * k;
-}
-
-/* The room as the shader leaves it once a sleeve has washed it. Mirrors the
-   GLSL exactly; both read WASH. Note that `gain` multiplies the tint and not
-   the glow — see the shader for why that separation exists. */
-export function washRoom(room, sleeve, washI, pool, gain) {
+/* The room as the shader leaves it once a sleeve has leaned on it. Mirrors the
+   GLSL exactly; both read WASH. The sleeve is normalised to unit luminance
+   first — multiplying the room by a raw sleeve colour just darkens it, and a
+   navy cover turned the room muddy instead of blue. Dividing out the colour's
+   own brightness leaves hue and saturation, so the room shifts colour while
+   holding its light. */
+export function washRoom(room, sleeve, washI) {
   var wl = Math.max(luma(sleeve), 0.05);
+  var k = clamp01(washI == null ? 1 : washI) * WASH.lean;
   var out = [];
-  var k = Math.min(pool * washI * (gain == null ? 1 : gain) * WASH.tint, WASH.tintMax);
   for (var i = 0; i < 3; i++) {
-    var w = 1 + (sleeve[i] / wl - 1) * WASH.temper;
-    w = Math.max(0.38, Math.min(1.75, w));
-    out.push(room[i] * (1 - k) + room[i] * w * k + sleeve[i] * pool * washI * WASH.add);
+    var w = Math.max(0.38, Math.min(1.75, 1 + (sleeve[i] / wl - 1) * WASH.temper));
+    out.push(room[i] * (1 - k) + room[i] * w * k);
   }
   return out;
 }
