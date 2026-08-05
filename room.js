@@ -14,7 +14,7 @@
    Returns null when WebGL is unavailable so the caller can fall
    back to the CSS gradient.
    ============================================================ */
-import { WASH } from "./light.js";
+import { WASH, STRIP, orderByHue } from "./light.js";
 
 var VERT =
   "attribute vec2 aPos; varying vec2 vUv;" +
@@ -34,8 +34,9 @@ var FRAG = [
   "uniform vec3 uLight;",            // colour arriving through the glass
   "uniform vec3 uRoom;",             // ambient wall, cloud already in it
   "uniform vec3 uWarm; uniform float uWarmI;",   // tungsten lamp
-  "uniform vec3 uWash; uniform vec3 uWash2; uniform float uWashI;",   // the record's colours
-  "uniform float uWashGain;",        // what the sun makes the record pay
+  "uniform vec3 uWash; uniform vec3 uWash2; uniform vec3 uWash3;",   // the sleeve, hue-ordered across the strip
+  "uniform vec3 uLean; uniform float uWashI;",   // the sleeve's dominant colour, and whether a record is on
+  "uniform float uCover;",           // how much of the room the page has scrolled over
   "uniform float uCloud, uWet, uFog, uHaze;",
   "uniform vec2 uWind;",
 
@@ -122,33 +123,26 @@ var FRAG = [
   "  float lamp = 1.0 / (1.0 + ld*ld*2.4);",
   "  col += uWarm * lamp * uWarmI * 0.30;",
 
-  // ---- the record's colour, drifting on the wind
-  "  vec2 q = vec2((uv.x-0.5)*asp, uv.y-0.5)*1.15 + par*0.6;",
-  "  vec2 warp = vec2(fbm(q + vec2(0.0, t)), fbm(q + vec2(4.3, -t*0.9)));",
-  "  float field = fbm(q*0.90 + warp*1.2 + uWind*t*1.4);",
-  /* A floor under the pool so the record always colours the whole room, with
-     the noise varying how strongly rather than whether. */
-  "  float pool = " + f(WASH.poolMin) + " + " + f(1 - WASH.poolMin) + "*smoothstep(0.24, 0.90, field);",
-  /* Two sleeve colours drift against each other so the wash has internal
-     movement instead of one flat cast. */
-  "  float blend = smoothstep(0.26, 0.80, fbm(q*1.55 - warp*0.7 + vec2(t*1.2, -t*0.7)));",
-  "  vec3 washCol = mix(uWash, uWash2, blend);",
-  /* Normalised to unit luminance before tinting. Multiplying the room by a raw
+  /* ---- the record, as a lean in the walls.
+     Normalised to unit luminance before tinting. Multiplying the room by a raw
      sleeve colour just darkens it — a navy cover turned the room muddy instead
      of blue. Dividing out the colour's own brightness leaves hue and satura-
-     tion, so the room shifts colour while holding its light. */
-  "  float wl = max(luma(washCol), 0.05);",
-  "  vec3 w = clamp(mix(vec3(1.0), washCol/wl, " + f(WASH.temper) + "), vec3(0.38), vec3(1.75));",
-  /* uWashGain is washGain(altitude): the sun is more light than a sleeve is,
-     and a tint set to read after dark is invisible at noon.
+     tion, so the room shifts colour while holding its light.
 
-     It lifts the tint and only the tint. The glow below is additive, and
-     additive light on an already-bright room is exactly what blows out —
-     gained, a saturated sleeve at midday turned the walls into white swirls
-     instead of colouring them. The tint is a ratio and survives daylight
-     honestly; the glow is for after dark and stays there. */
-  "  col = mix(col, col * w, min(pool * uWashI * uWashGain * " + f(WASH.tint) + ", " + f(WASH.tintMax) + "));",
-  "  col += washCol * pool * uWashI * " + f(WASH.add) + ";",
+     The divisor guards against zero and nothing else. It clamped at 0.05 until
+     a sweep caught what that cost: a sleeve darker than luma 0.05 had its
+     ratios flattened toward 1, so dark covers dimmed the room instead of
+     colouring it — the exact opposite of the paragraph above. light.js carries
+     the full diagnosis. The clamp below already bounds the near-black case the
+     floor was guarding.
+
+     Flat and motionless on purpose. This is the record's standing presence,
+     felt rather than seen; the strip is what it actually looks like. What used
+     to be here was an fbm field drifting on the wind, and viewport-scale
+     colour moving behind text is impossible to stop reading. */
+  "  float ll = max(luma(uLean), 0.0001);",
+  "  vec3 lw = clamp(mix(vec3(1.0), uLean/ll, " + f(WASH.temper) + "), vec3(0.38), vec3(1.75));",
+  "  col = mix(col, col*lw, uWashI * " + f(WASH.lean) + ");",
 
   /* ---- rain again, last: wet air takes the warmth back out of whatever the
      window, the lamp and the record have put in the room. */
@@ -195,7 +189,7 @@ export function createRoom(host) {
     res: u("uRes"), time: u("uTime"), mouse: u("uMouse"),
     win: u("uWin"), winI: u("uWinI"), light: u("uLight"), room: u("uRoom"),
     warm: u("uWarm"), warmI: u("uWarmI"), wash: u("uWash"), washI: u("uWashI"),
-    wash2: u("uWash2"), washGain: u("uWashGain"),
+    wash2: u("uWash2"), wash3: u("uWash3"), lean: u("uLean"), cover: u("uCover"),
     cloud: u("uCloud"), wet: u("uWet"), fog: u("uFog"), haze: u("uHaze"), wind: u("uWind")
   };
 
@@ -220,7 +214,8 @@ export function createRoom(host) {
      here ever snaps except the very first frame. */
   var cur = {
     win: [0.5, 0.6], winI: 0, light: [0, 0, 0], room: [0, 0, 0],
-    warm: [0, 0, 0], warmI: 0, wash: [0, 0, 0], wash2: [0, 0, 0], washI: 0, washGain: 1,
+    warm: [0, 0, 0], warmI: 0, wash: [0, 0, 0], wash2: [0, 0, 0], wash3: [0, 0, 0],
+    lean: [0, 0, 0], washI: 0, cover: 0,
     cloud: 0, wet: 0, fog: 0, haze: 0, wind: [0, 0]
   };
   var tgt = JSON.parse(JSON.stringify(cur));
@@ -232,7 +227,6 @@ export function createRoom(host) {
     if (s.warm) tgt.warm = s.warm.slice();
     if (typeof s.winI === "number") tgt.winI = s.winI;
     if (typeof s.warmI === "number") tgt.warmI = s.warmI;
-    if (typeof s.washGain === "number") tgt.washGain = s.washGain;
     if (immediate) cur = JSON.parse(JSON.stringify(tgt));
   }
   function setWeather(w) {
@@ -240,13 +234,25 @@ export function createRoom(host) {
     tgt.fog = w.fog || 0; tgt.haze = w.haze || 0;
     if (w.wind) tgt.wind = w.wind.slice();
   }
-  /* null → no usable colour in the sleeve; decay back to the room's own light. */
+  /* null → no usable colour in the sleeve; decay back to the room's own light.
+
+     Two orderings, because they answer different questions. The lean wants the
+     cover's *dominant* colour, which is the order albumPalette returns. The
+     strip wants them laid warm edge to cool edge, which is orderByHue's. */
   function setWash(colors, amount) {
     if (!colors || !colors.length) { tgt.washI = 0; return; }
-    tgt.wash = colors[0].slice();
-    tgt.wash2 = (colors[1] || colors[0]).slice();
+    var o = orderByHue(colors);
+    tgt.lean = colors[0].slice();
+    tgt.wash = o[0].slice();
+    tgt.wash2 = (o[1] || o[0]).slice();
+    tgt.wash3 = (o[2] || o[1] || o[0]).slice();
     tgt.washI = typeof amount === "number" ? amount : 1;
   }
+
+  /* How much of the room the page has scrolled over. The strip fades out under
+     the content bands rather than ghosting through them at BAND_ALPHA and
+     being cut by a band edge — which is what made the old wash read as glass. */
+  function setCover(v) { tgt.cover = v < 0 ? 0 : v > 1 ? 1 : v; }
 
   var mx = 0.5, my = 0.5, tmx = 0.5, tmy = 0.5;
   window.addEventListener("pointermove", function (e) {
@@ -266,10 +272,12 @@ export function createRoom(host) {
     ease3(cur.light, tgt.light, 0.035); ease3(cur.room, tgt.room, 0.035);
     ease3(cur.warm, tgt.warm, 0.035);
     ease3(cur.wash, tgt.wash, 0.03); ease3(cur.wash2, tgt.wash2, 0.03);
+    ease3(cur.wash3, tgt.wash3, 0.03); ease3(cur.lean, tgt.lean, 0.03);
     cur.winI = ease(cur.winI, tgt.winI, 0.035);
     cur.warmI = ease(cur.warmI, tgt.warmI, 0.035);
     cur.washI = ease(cur.washI, tgt.washI, 0.035);     // the record fades in and out slowly
-    cur.washGain = ease(cur.washGain, tgt.washGain, 0.035);
+    /* Faster than the sun eases, because this one tracks the scrollbar. */
+    cur.cover = ease(cur.cover, tgt.cover, 0.15);
     cur.cloud = ease(cur.cloud, tgt.cloud, 0.03);
     cur.wet = ease(cur.wet, tgt.wet, 0.03);
     cur.fog = ease(cur.fog, tgt.fog, 0.03);
@@ -289,7 +297,9 @@ export function createRoom(host) {
     gl.uniform3fv(U.wash, cur.wash);
     gl.uniform3fv(U.wash2, cur.wash2);
     gl.uniform1f(U.washI, cur.washI);
-    gl.uniform1f(U.washGain, cur.washGain);
+    gl.uniform3fv(U.wash3, cur.wash3);
+    gl.uniform3fv(U.lean, cur.lean);
+    gl.uniform1f(U.cover, cur.cover);
     gl.uniform1f(U.cloud, cur.cloud);
     gl.uniform1f(U.wet, cur.wet);
     gl.uniform1f(U.fog, cur.fog);
@@ -303,5 +313,5 @@ export function createRoom(host) {
   }
   requestAnimationFrame(frame);
 
-  return { setLight: setLight, setWeather: setWeather, setWash: setWash, canvas: canvas };
+  return { setLight: setLight, setWeather: setWeather, setWash: setWash, setCover: setCover, canvas: canvas };
 }
