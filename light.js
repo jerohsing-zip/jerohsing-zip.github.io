@@ -233,6 +233,54 @@ export function bandGrounds(band, room) {
   return [bandOver(band, room), bandOver(band, [0, 0, 0]), bandOver(band, [1, 1, 1])];
 }
 
+/* ---------- the prism ----------
+   The record reaches the room as a strip of split light rather than as weather
+   in the air. Something with a bevelled edge sits in the room's light; the
+   record is what that light breaks into.
+
+   Nothing here varies with time. That is the point rather than an economy: a
+   bright band on a wall is furniture, a moving field is weather, and the eye
+   tracks weather. The previous wash drifted on the wind and was impossible to
+   stop reading.
+
+   The colours are the sleeve's own, laid across the strip's width by
+   orderByHue(). What reads as refraction is separation — light that arrived as
+   one thing landing as three, side by side — not a manufactured spectrum. */
+export var STRIP = {
+  W: 0.028,          // half-width, aspect-corrected units
+  L: 0.30,           // half-length
+  THROW: 0.26,       // how far below the caster the strip lands
+  ANG: 0.62,         // radians of sweep either side of centre
+  GAIN: 0.22,        // additive strength at full intensity
+  LAMP_W: 0.55,      // the lamp's weight as a caster, against the sun's
+  NODE_FLOOR: 0.72,  // caustic nodes: the strip is not evenly lit along its length
+  NODE_VAR: 0.55,
+  NODE_FREQ: 13.0,
+  /* Unit luminance is not unit channels — a saturated red normalised to
+     luma 1 reaches 3.34 in red, which would put the peak addition near 1.0
+     and blow the wall out. The wash's own clamp exists for the same reason. */
+  CH_MAX: 2.2
+};
+
+/* The worst the strip can add to one channel: a fully saturated sleeve colour
+   at a caustic node, at full intensity. check-contrast.mjs holds this to a
+   ceiling, which is what makes "the strip cannot break the room" a checked
+   claim rather than an asserted one. */
+export function stripPeak() {
+  return STRIP.GAIN * (STRIP.NODE_FLOOR + STRIP.NODE_VAR) * STRIP.CH_MAX;
+}
+
+/* How hard the strip is thrown, given the light there is to refract and how
+   much of the room is still visible. Mirrors the shader's dominance maths.
+
+   Excludes the record's own washI: that is whether there is a record at all,
+   which is the caller's business, not the light model's. */
+export function stripI(alt, cloud, cover) {
+  var sun = windowI(alt) * (1 - clamp01(cloud || 0));
+  var lamp = tungstenI(alt) * STRIP.LAMP_W;
+  return Math.max(sun, lamp) * (1 - clamp01(cover || 0));
+}
+
 /* legible(), but the text has to clear `target` on every ground it can land
    on, not just the nominal one. Returns the strongest tint that does; falls
    back to the extreme when no tint can, which the sweep then catches. */

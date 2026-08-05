@@ -4,7 +4,7 @@
    Run: node scripts/check-contrast.mjs */
 import {
   tokensFor, contrast, relLum, washRoom, washGain, bandGrounds, orderByHue,
-  LIGHT, BAND_ALPHA, WASH
+  stripI, stripPeak, LIGHT, BAND_ALPHA, WASH
 } from "../light.js";
 
 const BODY = 4.5;      // WCAG AA, normal text
@@ -182,6 +182,32 @@ for (const p of PALETTES) {
 const rgb = orderByHue([[0.1, 0.2, 0.8], [0.2, 0.7, 0.2], [0.9, 0.1, 0.1]]);
 if (keyOf(rgb[0]) !== keyOf([0.9, 0.1, 0.1])) bad("orderByHue did not put the warmest colour first");
 console.log("orderByHue: permutation and warm-first hold");
+
+/* ---- the strip may not blow the wall out ----
+   The strip is additive and its colour is normalised to unit *luminance*,
+   which is not unit *channels*: a saturated red normalised that way reaches
+   1/0.299 in red. STRIP.CH_MAX is the ceiling that keeps the worst case —
+   a fully saturated sleeve colour at a caustic node, at full intensity —
+   inside a bound that can be stated as a number instead of hoped for. */
+const STRIP_CEILING = 0.65;
+const peak = stripPeak();
+console.log(`strip peak addition ${peak.toFixed(3)} (ceiling ${STRIP_CEILING})`);
+if (peak > STRIP_CEILING) bad(`strip peak addition ${peak.toFixed(3)} exceeds ${STRIP_CEILING}`);
+if (!(peak > 0)) bad("strip peak addition is not positive — the strip would never be visible");
+
+/* The strip is an event, not a constant: it needs a source, direct light, and
+   an uncovered room. Each of those must actually be able to switch it off. */
+if (stripI(60, 0, 1) > 1e-6) bad("a fully covered room still draws the strip");
+if (stripI(60, 1, 0) >= stripI(60, 0, 0)) bad("overcast does not dim the strip");
+if (stripI(-40, 0, 0) > stripI(60, 0, 0)) bad("the strip is stronger at midnight than at high sun");
+for (const alt of ALTS) for (const cloud of CLOUDS) {
+  const v = stripI(alt, cloud, 0);
+  if (!isFinite(v) || v < 0 || v > 1) bad(`stripI out of 0..1 at ${alt}° / cloud ${cloud}: ${v}`);
+}
+/* After dark the lamp takes over as the caster, so the strip never vanishes
+   entirely while a record is on — it moves and weakens. */
+if (!(stripI(-30, 0, 0) > 0)) bad("the lamp does not cast the strip after dark");
+console.log(`strip intensity: ${stripI(60, 0, 0).toFixed(2)} high sun, ${stripI(-30, 0, 0).toFixed(2)} night, ${stripI(60, 1, 0).toFixed(2)} overcast noon`);
 
 console.log(fail ? `\n${fail} FAILURE(S)` : "\nAll contrast checks passed.");
 process.exit(fail ? 1 : 0);
