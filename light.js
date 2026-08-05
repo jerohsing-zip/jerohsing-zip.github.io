@@ -196,7 +196,13 @@ export var WASH = {
    own brightness leaves hue and saturation, so the room shifts colour while
    holding its light. */
 export function washRoom(room, sleeve, washI) {
-  var wl = Math.max(luma(sleeve), 0.05);
+  /* A true epsilon, not a brightness floor. This used to clamp at 0.05, which
+     silently made dark sleeves dim the room instead of colouring it — a navy
+     cover at luma 0.027 was divided by 0.05, so its ratios came out flattened
+     toward 1 and the tint it should have thrown went missing. The [0.38, 1.75]
+     clamp below already bounds the near-black case this was guarding, so the
+     floor was redundant as well as wrong. Guard only against division by zero. */
+  var wl = Math.max(luma(sleeve), 1e-4);
   var k = clamp01(washI == null ? 1 : washI) * WASH.lean;
   var out = [];
   for (var i = 0; i < 3; i++) {

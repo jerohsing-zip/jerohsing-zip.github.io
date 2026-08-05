@@ -114,10 +114,25 @@ const SLEEVES = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [0, 1, 1], [1, 0, 1
    walls as a material, and a material's colour is not the light's to erase.
    This bound guards how far the light may reach instead.
 
-   Worst observed retention is 0.250 — a pure green sleeve against the rose
-   room at civil twilight, exact complements, at a corner of the colour cube
-   that no real cover reaches. The floor is set below that with margin, and
-   the corners are deliberately a harder test than anything that can ship. */
+   This is one-sided: it only catches a lean that reaches too far. A
+   washRoom() that ignored the sleeve entirely and returned the room
+   unchanged — or just dimmed it — would retain 1.0 and sail through. It is
+   the reach proof directly below that catches that failure, by requiring the
+   leaned room to differ from the unwashed one by at least LEAN_FLOOR. Only
+   the two together pin the lean down, to roughly 0.046 ≤ WASH.lean ≤ 0.13.
+
+   Worst observed retention at the shipped WASH.lean = 0.12 is 0.250 — a pure
+   green sleeve against the rose room at civil twilight, exact complements,
+   at a corner of the colour cube that no real cover reaches. The floor is
+   set below that with margin, and the corners are deliberately a harder test
+   than anything that can ship.
+
+   This bound is NOT monotone in WASH.lean — worst retention runs 0.12 → pass
+   (0.250), 0.14 → fail (0.113), 0.16 → fail (0.125), 0.20 → pass again
+   (0.234), 0.30 → fail (0.153). So a larger lean passing this check later is
+   not evidence it is safe; it can pass, fail, and pass again as the value
+   climbs. Anyone hand-tuning WASH.lean needs both proofs green at the new
+   value, not just this one, and should not trust a pass here in isolation. */
 const RETENTION_FLOOR = 0.20;
 let worstRet = Infinity, atRet = "";
 
@@ -135,6 +150,23 @@ for (const alt of ALTS) for (const cloud of CLOUDS) {
 }
 console.log(`lean saturation retention: worst ${worstRet.toFixed(3)} (${atRet}, floor ${RETENTION_FLOOR})`);
 if (worstRet < RETENTION_FLOOR) bad(`the lean bleached the room: retention ${worstRet.toFixed(3)} at ${atRet}`);
+
+/* The achromatic corner is a no-op by construction: a grey sleeve normalises
+   to a multiplier of 1, so it cannot move the room. Asserted rather than
+   asserted-in-a-comment — signals.js refuses these covers upstream, and a
+   claim nothing checks is how that upstream guard quietly becomes load-
+   bearing without anyone noticing. */
+for (const alt of ALTS) for (const cloud of CLOUDS) {
+  const room = tokensFor(alt, cloud).room;
+  for (const grey of [[.5, .5, .5], [.04, .04, .04], [1, 1, 1]]) {
+    const w = washRoom(room, grey, 1);
+    for (let i = 0; i < 3; i++) {
+      if (Math.abs(w[i] - room[i]) > 1e-9) {
+        bad(`a grey sleeve moved the room at ${alt}° / cloud ${cloud}: ${room} -> ${w}`);
+      }
+    }
+  }
+}
 
 /* The record is never entirely absent from the room. The strip comes and goes
    with the light, the weather and the scroll — so the lean is what has to be
