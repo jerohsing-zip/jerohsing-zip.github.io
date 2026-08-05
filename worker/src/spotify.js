@@ -53,7 +53,7 @@ const API = "https://api.spotify.com/v1";
 
 /* The exact field set app.js renders. Nothing more — the page is the
    only consumer and extra fields would just be dead weight on the wire. */
-function toTrack(item, { nowPlaying, period, at }) {
+function toTrack(item, { nowPlaying, period, at, progressMs }) {
   const album = item.album || {};
   const images = album.images || [];
   return {
@@ -64,7 +64,12 @@ function toTrack(item, { nowPlaying, period, at }) {
     url: (item.external_urls || {}).spotify || null,
     nowPlaying,
     period,
-    at
+    at,
+    /* The playhead. Only meaningful while something is actually playing, so
+       it is null on the recently-played fallback rather than a stale number.
+       The page extrapolates between polls to draw the turntable's position. */
+    progressMs: progressMs != null ? progressMs : null,
+    durationMs: item.duration_ms != null ? item.duration_ms : null
   };
 }
 
@@ -77,7 +82,10 @@ async function currentlyPlaying(auth) {
   if (!j || !j.item || !j.is_playing) return null;      // paused counts as not playing
   if (j.item.type && j.item.type !== "track") return null;  // podcasts aren't music
 
-  return toTrack(j.item, { nowPlaying: true, period: null, at: new Date().toISOString() });
+  return toTrack(j.item, {
+    nowPlaying: true, period: null, at: new Date().toISOString(),
+    progressMs: j.progress_ms
+  });
 }
 
 async function recentlyPlayed(auth) {

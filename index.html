@@ -1,10 +1,10 @@
 <!--
-  DIRECTION CONTRACT — NOW (live portfolio) · Experience
-  THESIS: A warm telemetry readout of a real person, alive inside a filmic time-of-day sky. Owns "presence"; refuses the résumé-first hero and the metrics-dashboard grid.
-  OWN-WORLD: Drenched, time-driven ground (dawn/day/dusk/night) computed from Jerome's timezone; warm ink + lamp-amber accent; secondary text tinted from the sky, never gray. Bricolage Grotesque (human) against Martian Mono (the instrument). A hairline-divided readout panel with a live pulse floats over a graded, grained sky.
-  STORY: A recruiter opens one of ten tabs and finds a person awake somewhere right now — local clock ticking, song, game, last commit — then scrolls into real work, roles, story, and reaches out.
-  FIRST VIEWPORT: Full-bleed night sky; thin wordmark + ● LIVE; centered instrument — big ticking TOKYO clock, then LISTENING / PLAYING / SHIPPING rows; a one-line human statement; Work · Story · Résumé; a quiet scroll cue.
-  FORM: NOW / living instrument. User-pinned via brainstorm (no concept roll). Separate surface from the root LOADOUT/BRUTAL site.
+  DIRECTION CONTRACT — NIGHT SERVICE (live portfolio) · Experience
+  THESIS: A broadcast in progress from wherever Jerome actually is. Refuses the résumé-first hero and the project-card grid.
+  OWN-WORLD: A booth lit by three real signals — a window at the sun's true bearing, a tungsten desk lamp, and the colour of the record now playing. Bone paper plates over a room that spans daylight to deep-teal night; oxblood reserved for the on-air lamp and nothing else. Archivo at expanded width as station idents, Sometype Mono for genuine measurement.
+  STORY: A recruiter lands mid-transmission, is identified immediately by a persistent ident, reads the segments and the record, and opens the line.
+  FIRST VIEWPORT: Full-bleed room lit from the window at the sun's real bearing; the ident plate fixed top-left carrying name, role and contact; the current state — local time, transmitting origin, conditions, what's spinning — as an opaque bone plate; no nav chrome, no hero.
+  FORM: NIGHT SERVICE. Candidate 3 of 7 on the grounded list; seed 80c357fb.
 -->
 <!DOCTYPE html>
 <html lang="en" data-scene="dark">
@@ -12,209 +12,212 @@
 <meta charset="utf-8" />
 <script>document.documentElement.classList.add("js");</script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Jerome Hsing — live</title>
-<meta name="description" content="A living portrait of Jerome Hsing: engineer, economist, consultant, awake in Tokyo. What he's building, listening to, playing, and shipping, right now." />
+<title>Jerome Hsing · on air</title>
+<meta name="description" content="A live signal from Jerome Hsing: engineer, economist, consultant. Where he is right now, what the weather is doing there, and what's on the turntable." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Martian+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Sometype+Mono:wght@400..600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-<!-- living sky: grain + vignette + motes sit behind everything -->
-<div class="sky" aria-hidden="true">
-  <div class="sky__grain"></div>
-  <div class="sky__vignette"></div>
-  <div class="sky__motes" data-motes></div>
+<!-- the room: WebGL inserts itself here; the CSS gradient below is the no-JS floor -->
+<div class="room" aria-hidden="true">
+  <div class="room__fallback"></div>
+  <div class="room__grain"></div>
 </div>
 
-<a class="skip" href="#work">Skip to work</a>
+<a class="skip" href="#segments">Skip to the work</a>
 
-<header class="top">
-  <a class="top__mark" href="#top">JEROME HSING</a>
-  <span class="top__live" aria-label="Live status">
-    <i class="pulse" aria-hidden="true"></i><span data-status>LIVE</span>
-  </span>
+<!--
+  The ident. Persistent and opaque by design: real broadcasts identify
+  themselves constantly and briefly, and this is the one thing a recruiter
+  must never have to hunt for. It owes the room nothing.
+-->
+<header class="ident">
+  <div class="ident__face" data-face hidden>
+    <img src="assets/jerome.jpg" alt="Jerome Hsing" width="112" height="112" data-portrait />
+  </div>
+  <div class="ident__body">
+    <p class="ident__station">
+      <span class="ident__lamp" data-lamp aria-hidden="true"></span>
+      <span class="mono" data-onair>ON AIR</span>
+    </p>
+    <h1 class="ident__name">Jerome Hsing</h1>
+    <p class="ident__role">Software engineer &amp; consultant. Computer science and economics. Japanese, Mandarin, English.</p>
+    <p class="ident__links">
+      <a href="mailto:jerohsing@gmail.com">jerohsing@gmail.com</a>
+      <a data-resume href="JeromeHsing_Resume.pdf">Résumé</a>
+      <!-- LinkedIn is injected by app.js only when a real URL is configured.
+           The previous build shipped a visible "[link TBD]" pointing at the
+           bare linkedin.com homepage; a dead link is worse than no link. -->
+    </p>
+  </div>
 </header>
 
 <main id="top">
 
-  <!-- ===== NOW — the living instrument ===== -->
-  <section class="now" aria-label="Jerome, right now">
-    <p class="now__kick">Right now, Jerome is</p>
-
-    <div class="instrument">
-      <div class="clock reveal">
-        <time class="clock__time" data-clock aria-live="off">23:14:07</time>
-        <div class="clock__place">
-          <span class="clock__city" data-city>Tokyo</span>
-          <span class="clock__meta mono"><span data-tz>JST</span> · <span data-daypart>night</span></span>
-          <span class="clock__wx mono" data-wx></span>
-        </div>
+  <!-- ===== ON AIR — the current transmission ===== -->
+  <section class="onair" aria-label="Right now">
+    <div class="plate">
+      <div class="plate__head">
+        <span class="plate__k mono">Transmitting from</span>
+        <!-- Neutral until location.json resolves. No city may be hardcoded:
+             Jerome is itinerant and a stale city is a lie the whole page rests on. -->
+        <span class="plate__place" data-city>—</span>
+        <span class="plate__meta mono">
+          <span data-tz></span><span data-wx></span>
+        </span>
       </div>
 
-      <ul class="signals">
-        <li class="sig reveal" data-sig="listen">
-          <span class="sig__k mono">Listening</span>
-          <span class="sig__art" data-art aria-hidden="true"><i>♪</i></span>
-          <!-- Pre-JS placeholder only. renderListen() in app.js overwrites this on
-               every load. It MUST stay neutral (matching renderListen(null)) since
-               the Worker may be unreachable or unconfigured for a while after the
-               static HTML is deployed — a fabricated track here has shipped as a
-               permanent lie before. Do not put real-looking track text back in. -->
-          <span class="sig__body">
-            <span class="sig__title" data-listen-title>quiet right now</span>
-            <span class="sig__sub mono"><span data-listen-artist>no track</span></span>
+      <p class="plate__clock mono" data-clock aria-live="off">--:--:--</p>
+
+      <ul class="cues">
+        <li class="cue" data-sig="listen">
+          <span class="cue__k mono">On the turntable</span>
+          <span class="cue__art" data-art aria-hidden="true"></span>
+          <!-- Pre-JS placeholder only, and deliberately neutral: it must match
+               the empty render exactly. A fabricated track has shipped here as a
+               permanent lie before. Do not put real-looking text back in. -->
+          <span class="cue__body">
+            <span class="cue__title" data-listen-title>nothing spinning</span>
+            <span class="cue__sub mono" data-listen-artist></span>
           </span>
-          <span class="sig__stamp mono" data-stamp="listen"></span>
+          <span class="cue__stamp mono" data-stamp="listen"></span>
         </li>
 
-        <li class="sig reveal" data-sig="play">
-          <span class="sig__k mono">Playing</span>
-          <span class="sig__icon" aria-hidden="true">▶</span>
-          <span class="sig__body">
-            <span class="sig__title" data-play-title>Elden Ring</span>
-            <span class="sig__sub mono"><span data-play-platform>Steam</span> · <span data-play-hours>6.4h</span> this week</span>
+        <li class="cue" data-sig="play">
+          <span class="cue__k mono">In the console</span>
+          <span class="cue__body">
+            <span class="cue__title" data-play-title>nothing this week</span>
+            <span class="cue__sub mono" data-play-platform></span>
           </span>
-          <span class="sig__stamp mono" data-stamp="play">yesterday</span>
+          <span class="cue__stamp mono" data-stamp="play"></span>
         </li>
 
-        <li class="sig reveal" data-sig="ship">
-          <span class="sig__k mono">Shipping</span>
-          <span class="sig__icon" aria-hidden="true">⌥</span>
-          <span class="sig__body">
-            <span class="sig__title" data-ship-title>wire live.json snapshot pipeline</span>
-            <span class="sig__sub mono">pushed to <span data-ship-repo>portfolio</span></span>
+        <li class="cue" data-sig="ship">
+          <span class="cue__k mono">Last pushed</span>
+          <span class="cue__body">
+            <span class="cue__title" data-ship-title>quiet on the wire</span>
+            <span class="cue__sub mono" data-ship-repo></span>
           </span>
-          <span class="sig__stamp mono" data-stamp="ship">2h ago</span>
+          <span class="cue__stamp mono" data-stamp="ship"></span>
         </li>
       </ul>
 
-      <p class="instrument__fresh mono" data-fresh>updated just now</p>
+      <p class="plate__fresh mono" data-fresh></p>
+      <!-- Lives on the plate, not on the room: every piece of text on this page
+           sits on a known opaque surface so contrast is provable at any hour. -->
+      <p class="plate__cue mono" aria-hidden="true">the programme continues below</p>
     </div>
-
-    <p class="statement reveal">
-      I build software, read markets, and translate between them,
-      in <em>three languages</em>, out of Tokyo.
-    </p>
-
-    <nav class="actions reveal" aria-label="Sections">
-      <a href="#work"><span class="mono">01</span>Work</a>
-      <a href="#record"><span class="mono">02</span>Record</a>
-      <a href="#story"><span class="mono">03</span>Story</a>
-      <a href="../JeromeHsing_Resume_1col.docx" download><span class="mono">↓</span>Résumé</a>
-    </nav>
-
-    <span class="scrollcue mono" aria-hidden="true">scroll</span>
   </section>
 
-  <!-- ===== WORK ===== -->
-  <section class="band" id="work" aria-labelledby="work-h">
+  <!-- ===== SEGMENTS — work ===== -->
+  <section class="band" id="segments" aria-labelledby="segments-h">
     <div class="band__head">
-      <h2 class="band__title" id="work-h">Work</h2>
-      <p class="band__note mono">Selected builds. Full writeups incoming.</p>
+      <h2 class="band__title" id="segments-h">Segments</h2>
+      <p class="band__note mono">Things built, and what they had to solve.</p>
     </div>
 
-    <ol class="works">
-      <li class="work">
-        <div class="work__meta mono">
-          <span class="work__role">AI Exploration Intern</span>
-          <span class="work__year">2023</span>
+    <ol class="segs">
+      <li class="seg">
+        <div class="seg__meta mono">
+          <span class="seg__year">2023</span>
+          <span>AI Exploration Intern</span>
         </div>
-        <div class="work__main">
-          <h3 class="work__name">HireFlow: Candidate-Fit Engine</h3>
-          <p class="work__desc">A GPT-4 proof-of-concept that reads a résumé against a role and explains, in plain language, why a candidate fits. Paired with a Python service for natural-language candidate search.</p>
+        <div class="seg__main">
+          <h3 class="seg__name">HireFlow: Candidate-Fit Engine</h3>
+          <p class="seg__desc">A GPT-4 proof-of-concept that reads a résumé against a role and explains, in plain language, why a candidate fits. Paired with a Python service for natural-language candidate search.</p>
           <ul class="tags mono"><li>GPT-4 API</li><li>Python</li><li>NLP</li></ul>
         </div>
       </li>
-      <li class="work">
-        <div class="work__meta mono">
-          <span class="work__role">Full-Stack Engineer Intern</span>
-          <span class="work__year">2023</span>
+      <li class="seg">
+        <div class="seg__meta mono">
+          <span class="seg__year">2023</span>
+          <span>Full-Stack Engineer Intern</span>
         </div>
-        <div class="work__main">
-          <h3 class="work__name">Moongrove: AI Product Imagery</h3>
-          <p class="work__desc">Shipped production web-app components for an AI product-image platform, working shoulder-to-shoulder with design and product, and wrote end-to-end tests to keep the surface honest.</p>
+        <div class="seg__main">
+          <h3 class="seg__name">Moongrove: AI Product Imagery</h3>
+          <p class="seg__desc">Shipped production web-app components for an AI product-image platform, working shoulder-to-shoulder with design and product, and wrote end-to-end tests to keep the surface honest.</p>
           <ul class="tags mono"><li>React</li><li>Full-stack</li><li>E2E Testing</li></ul>
         </div>
       </li>
-      <li class="work">
-        <div class="work__meta mono">
-          <span class="work__role">WashU · Creative Programming</span>
-          <span class="work__year">2023</span>
+      <li class="seg">
+        <div class="seg__meta mono">
+          <span class="seg__year">2023</span>
+          <span>WashU · Creative Programming</span>
         </div>
-        <div class="work__main">
-          <h3 class="work__name">Rapid Prototypes: Full-Stack Web Apps</h3>
-          <p class="work__desc">A run of full-stack apps built end to end across a semester — React and SASS on the front, PHP, SQL and MongoDB behind. Built fast, shipped often, learned in public.</p>
+        <div class="seg__main">
+          <h3 class="seg__name">Rapid Prototypes: Full-Stack Web Apps</h3>
+          <p class="seg__desc">A run of full-stack apps built end to end across a semester: React and SASS on the front, PHP, SQL and MongoDB behind. Built fast, shipped often, learned in public.</p>
           <ul class="tags mono"><li>React</li><li>SASS</li><li>PHP</li><li>SQL</li><li>MongoDB</li></ul>
         </div>
       </li>
     </ol>
   </section>
 
-  <!-- ===== RECORD ===== -->
+  <!-- ===== THE RECORD — career. The double meaning is the point. ===== -->
   <section class="band" id="record" aria-labelledby="record-h">
     <div class="band__head">
-      <h2 class="band__title" id="record-h">Record</h2>
+      <h2 class="band__title" id="record-h">The Record</h2>
       <p class="band__note mono">Where the reps happened.</p>
     </div>
 
-    <ol class="record">
-      <li class="rec">
-        <span class="rec__time mono">Jul 2025 – now</span>
-        <div class="rec__main">
-          <h3 class="rec__role">Associate Consultant <span class="rec__co">Kinaxis</span></h3>
-          <p class="rec__where mono">Supply-chain software · Tokyo</p>
-          <p class="rec__desc">Implemented Maestro on-site for a major Taiwanese semiconductor manufacturer, running client interviews, leading solution walkthroughs, and keeping the solution coherent across parallel projects.</p>
+    <ol class="log">
+      <li class="entry">
+        <span class="entry__time mono">Jul 2025 – now</span>
+        <div class="entry__main">
+          <h3 class="entry__role">Associate Consultant <span class="entry__co">Kinaxis</span></h3>
+          <p class="entry__where mono">Supply-chain software · Tokyo</p>
+          <p class="entry__desc">Implemented Maestro on-site for a major Taiwanese semiconductor manufacturer, running client interviews, leading solution walkthroughs, and keeping the solution coherent across parallel projects.</p>
         </div>
       </li>
-      <li class="rec">
-        <span class="rec__time mono">May – Aug 2024</span>
-        <div class="rec__main">
-          <h3 class="rec__role">Consulting Intern · Team Lead <span class="rec__co">Plus Curiosity</span></h3>
-          <p class="rec__where mono">Placemaking consulting · Tokyo</p>
-          <p class="rec__desc">Designed and translated the company overview deck for Japanese and English audiences, co-authored deliverables used with top Japanese land developers, and led a team of 12 interns on daily triage.</p>
+      <li class="entry">
+        <span class="entry__time mono">May – Aug 2024</span>
+        <div class="entry__main">
+          <h3 class="entry__role">Consulting Intern · Team Lead <span class="entry__co">Plus Curiosity</span></h3>
+          <p class="entry__where mono">Placemaking consulting · Tokyo</p>
+          <p class="entry__desc">Designed and translated the company overview deck for Japanese and English audiences, co-authored deliverables used with top Japanese land developers, and led a team of 12 interns on daily triage.</p>
         </div>
       </li>
-      <li class="rec">
-        <span class="rec__time mono">Jun – Aug 2023</span>
-        <div class="rec__main">
-          <h3 class="rec__role">AI Exploration Intern <span class="rec__co">HireFlow</span></h3>
-          <p class="rec__where mono">AI-powered recruiting · Los Angeles</p>
-          <p class="rec__desc">Prototyped a GPT-4 engine for candidate-role fit and a Python tool for natural-language candidate search.</p>
+      <li class="entry">
+        <span class="entry__time mono">Jun – Aug 2023</span>
+        <div class="entry__main">
+          <h3 class="entry__role">AI Exploration Intern <span class="entry__co">HireFlow</span></h3>
+          <p class="entry__where mono">AI-powered recruiting · Los Angeles</p>
+          <p class="entry__desc">Prototyped a GPT-4 engine for candidate-role fit and a Python tool for natural-language candidate search.</p>
         </div>
       </li>
-      <li class="rec">
-        <span class="rec__time mono">Jan – May 2023</span>
-        <div class="rec__main">
-          <h3 class="rec__role">Full-Stack Engineer Intern <span class="rec__co">Moongrove</span></h3>
-          <p class="rec__where mono">AI-generated product images · San Francisco</p>
-          <p class="rec__desc">Shipped web-app components to production with design and product, and wrote end-to-end tests to validate usability and catch regressions.</p>
+      <li class="entry">
+        <span class="entry__time mono">Jan – May 2023</span>
+        <div class="entry__main">
+          <h3 class="entry__role">Full-Stack Engineer Intern <span class="entry__co">Moongrove</span></h3>
+          <p class="entry__where mono">AI-generated product images · San Francisco</p>
+          <p class="entry__desc">Shipped web-app components to production with design and product, and wrote end-to-end tests to validate usability and catch regressions.</p>
         </div>
       </li>
     </ol>
   </section>
 
-  <!-- ===== STORY / PROFILE ===== -->
-  <section class="band" id="story" aria-labelledby="story-h">
+  <!-- ===== BETWEEN RECORDS — where the voice talks ===== -->
+  <section class="band" id="between" aria-labelledby="between-h">
     <div class="band__head">
-      <h2 class="band__title" id="story-h">Story</h2>
-      <p class="band__note mono">The operator behind the readout.</p>
+      <h2 class="band__title" id="between-h">Between Records</h2>
+      <p class="band__note mono">The operator, talking.</p>
     </div>
 
-    <div class="story">
-      <div class="story__prose">
+    <div class="talk">
+      <div class="talk__prose">
         <p>I sit where software, economics, and language overlap. A computer-science degree from <strong>Washington University in St. Louis</strong> and an economics degree from <strong>Claremont McKenna</strong> gave me two ways of seeing a problem: how to build it, and whether it's worth building.</p>
-        <p>What ties it together is translation. I move between engineering and business, and between Japanese, Mandarin, and English, without dropping meaning on the floor. It's the same instinct on a consulting call in Tokyo and in a code review at midnight.</p>
+        <p>What ties it together is translation. I move between engineering and business, and between Japanese, Mandarin, and English, without dropping meaning on the floor. It's the same instinct on a consulting call and in a code review at midnight.</p>
         <p>Off the clock: basketball, travel, food, and an ongoing backlog of video games.</p>
-        <a class="link-cta" href="../JeromeHsing_Resume_1col.docx" download>Download résumé <span aria-hidden="true">↓</span></a>
       </div>
 
-      <aside class="story__spec" aria-label="Specifications">
+      <aside class="talk__spec" aria-label="Details">
         <div class="spec">
           <h3 class="spec__h mono">Education</h3>
-          <p class="spec__line"><strong>BS Computer Science</strong> — WashU in St. Louis <span class="muted mono">GPA 3.68 · 2025</span></p>
-          <p class="spec__line"><strong>BA Economics</strong> — Claremont McKenna <span class="muted mono">Major GPA 3.80 · 2025</span></p>
+          <p class="spec__line"><strong>BS Computer Science</strong> · WashU in St. Louis <span class="muted mono">GPA 3.68 · 2025</span></p>
+          <p class="spec__line"><strong>BA Economics</strong> · Claremont McKenna <span class="muted mono">Major GPA 3.80 · 2025</span></p>
         </div>
         <div class="spec">
           <h3 class="spec__h mono">Stack</h3>
@@ -235,18 +238,14 @@
     </div>
   </section>
 
-  <!-- ===== CONTACT ===== -->
-  <section class="band contact" id="contact" aria-labelledby="contact-h">
-    <h2 class="contact__h" id="contact-h">Let's talk.</h2>
-    <p class="contact__sub">Recruiting, building, or just comparing notes: the line's open.</p>
-    <div class="contact__links">
-      <a class="clink" href="mailto:jerohsing@gmail.com">
-        <span class="clink__k mono">Email</span>
-        <span class="clink__v">jerohsing@gmail.com</span>
-      </a>
-      <a class="clink" href="https://www.linkedin.com/" target="_blank" rel="noopener">
-        <span class="clink__k mono">LinkedIn</span>
-        <span class="clink__v">in/jerome-hsing <span class="muted">[link TBD]</span></span>
+  <!-- ===== THE LINE'S OPEN — contact ===== -->
+  <section class="band close" id="contact" aria-labelledby="contact-h">
+    <h2 class="close__h" id="contact-h">The line's open.</h2>
+    <p class="close__sub">Recruiting, building, or just comparing notes. Call in.</p>
+    <div class="close__links" data-contact>
+      <a class="line" href="mailto:jerohsing@gmail.com">
+        <span class="line__k mono">Email</span>
+        <span class="line__v">jerohsing@gmail.com</span>
       </a>
     </div>
   </section>
@@ -254,7 +253,7 @@
 
 <footer class="foot mono">
   <span>Jerome Hsing</span>
-  <span data-foot-place>Tokyo · <span data-foot-clock>23:14</span> local</span>
+  <span data-foot-place>—</span>
   <span>© 2026</span>
 </footer>
 

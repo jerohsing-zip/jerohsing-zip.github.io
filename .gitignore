@@ -3,3 +3,9 @@ scripts/node_modules/
 .env
 *.log
 .DS_Store
+
+# Claude Code local state and scratch worktrees
+.claude/worktrees/
+.claude/settings.local.json
+# subagent-driven-development workspace
+.superpowers/

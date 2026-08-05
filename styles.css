@@ -1,38 +1,36 @@
 /* ============================================================
-   NOW — live portfolio. A warm telemetry instrument inside a
-   filmic, time-of-day sky. Separate world from the root site.
+   NIGHT SERVICE — a broadcast booth lit by real signals.
+   The room's colour is set by JS from the sun's true position;
+   --band, --text and --text-2 are derived and contrast-checked
+   there, which is why they are not literal values here.
    ============================================================ */
 
-/* ---------- phase palette (the ground IS the local time) ---------- */
 :root {
-  --font-h: "Bricolage Grotesque", system-ui, sans-serif;
-  --font-m: "Martian Mono", ui-monospace, monospace;
-  --edge: clamp(20px, 5vw, 80px);
-  --maxw: 1180px;
+  --font-d: "Archivo", system-ui, sans-serif;
+  --font-m: "Sometype Mono", ui-monospace, monospace;
+  --edge: clamp(20px, 5vw, 72px);
+  --maxw: 1120px;
   --ease: cubic-bezier(.2, .8, .2, 1);
 
-  /* night (default) */
-  --ground-top: #171A3A;
-  --ground-bottom: #08070F;
-  --text: #F3ECDE;
-  --text-2: #B4ADC6;
-  --accent: #F5B14E;
-  --accent-ink: #14100A;
-  --panel: rgba(18, 16, 28, .58);
-  --panel-solid: #14121E;
-  --line: rgba(243, 236, 222, .14);
-  --glow-x: 78%; --glow-y: 8%;
-  --glow: rgba(245, 177, 78, .16);
-  --grain-blend: soft-light;
-  --grain-opacity: .5;
-}
+  /* The credential layer. Opaque, always — it owes the room nothing, which
+     is what lets the room be as alive as it likes. */
+  --paper: #E8E2D4;
+  --ink: #1B1E1C;
+  --ink-2: #55584F;
+  --rule: rgba(27, 30, 28, .16);
 
-/* Two UI schemes only — light and dark — driven by the sky's live luminance
-   (JS sets data-scene). --accent / --accent-ink are set continuously by JS. */
-html[data-scene="light"] {
-  --text: #1A1826; --text-2: #5B5566;
-  --panel: rgba(255, 253, 247, .52); --panel-solid: #FBF6EC;
-  --line: rgba(20, 18, 30, .13);
+  /* Reserved: means live data is genuinely flowing. Nothing else may use it. */
+  --onair: #8E1F1F;
+
+  /* Overwritten every second by app.js; these are the pre-JS floor.
+     --band-a is --band at BAND_ALPHA, written from the one constant in
+     light.js that check-contrast.mjs also reads. */
+  --band: #0E1615;
+  --band-a: rgba(14, 22, 21, .84);
+  --text: #EDEAE0;
+  --text-2: #9AA5A2;
+  --fall-a: #16242A;
+  --fall-b: #080D0D;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -41,201 +39,300 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  font-family: var(--font-h);
-  font-weight: 500;
+  font-family: var(--font-d);
+  font-variation-settings: "wdth" 100;
+  font-weight: 400;
   color: var(--text);
-  background: var(--ground-bottom);
+  background: var(--fall-b);
   -webkit-font-smoothing: antialiased;
-  line-height: 1.5;
+  line-height: 1.55;
   overflow-x: hidden;
 }
-.mono { font-family: var(--font-m); font-weight: 500; }
-.muted { color: var(--text-2); }
-em { font-style: normal; color: var(--accent); }
+.mono { font-family: var(--font-m); font-weight: 400; }
+.muted { color: var(--ink-2); }
 strong { font-weight: 700; }
 a { color: inherit; text-decoration: none; }
+img { max-width: 100%; display: block; }
 
-/* ---------- the living sky ---------- */
-.sky { position: fixed; inset: 0; z-index: -2; background: linear-gradient(178deg, var(--ground-top), var(--ground-bottom) 78%); }
-/* JS stacks two of these and cross-fades them on a phase change (CSS can't
-   tween between gradients). No-JS falls back to the .sky base gradient above. */
-.sky__layer { position: absolute; inset: 0; }
-.sky__gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.sky::before {   /* key light — no-JS fallback; JS layers carry their own glow */
-  content: ""; position: absolute; inset: 0;
-  background: radial-gradient(60vmax 50vmax at var(--glow-x) var(--glow-y), var(--glow), transparent 62%);
+/* ---------- the room ---------- */
+.room { position: fixed; inset: 0; z-index: -2; background: var(--fall-b); }
+.room__fallback {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(70vmax 55vmax at 68% 22%, var(--fall-a), transparent 62%),
+    linear-gradient(176deg, var(--fall-a), var(--fall-b) 82%);
 }
-.sky__vignette { position: absolute; inset: 0; background: radial-gradient(120% 100% at 50% 32%, transparent 55%, rgba(0,0,0,.34)); }
-.sky__grain {
-  position: absolute; inset: -50%;
+/* The room cannot be lit until geocoding says where it is, so the shader
+   arrives a beat after the page. It crossfades up over the CSS gradient
+   underneath rather than cutting in — the lights coming up, not a swap. */
+.room__gl {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  opacity: 0; transition: opacity 1.4s var(--ease);
+}
+.room.is-lit .room__gl { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .room__gl { transition: none; }
+}
+.room__grain {
+  position: absolute; inset: -50%; pointer-events: none;
+  opacity: .34; mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: var(--grain-opacity); mix-blend-mode: var(--grain-blend); pointer-events: none;
 }
-.sky__motes { position: absolute; inset: 0; overflow: hidden; }
-.mote { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: var(--text); opacity: .18; }
+/* The shader carries its own grain. The fallback gradient stays in place: it is
+   what the canvas crossfades up from, and an opaque canvas covers it once lit. */
+.room.has-gl .room__grain { display: none; }
 
-/* ---------- shell ---------- */
 .skip { position: absolute; left: -999px; top: 8px; }
-.skip:focus { left: 8px; z-index: 20; background: var(--accent); color: var(--accent-ink); padding: 8px 12px; font-family: var(--font-m); font-size: 12px; }
-
-.top {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 12;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px var(--edge);
+.skip:focus {
+  left: 8px; z-index: 40; background: var(--paper); color: var(--ink);
+  padding: 8px 12px; font-family: var(--font-m); font-size: 12px;
 }
-.top__mark { font-family: var(--font-m); font-size: 12px; font-weight: 600; letter-spacing: .22em; }
-.top__live { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-m); font-size: 11px; letter-spacing: .2em; color: var(--text-2); }
-.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 var(--accent); }
-
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+:focus-visible { outline: 2px solid var(--onair); outline-offset: 3px; border-radius: 2px; }
 
 /* ============================================================
-   NOW — the instrument
+   THE IDENT — persistent, opaque, never hunted for
    ============================================================ */
-.now {
+.ident {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px var(--edge);
+  background: var(--paper); color: var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+.ident__face { flex: none; }
+.ident__face img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+.ident__body { display: flex; align-items: baseline; gap: 14px; min-width: 0; flex: 1; }
+
+.ident__station { margin: 0; display: inline-flex; align-items: center; gap: 7px; flex: none; }
+.ident__station .mono { font-size: 10px; letter-spacing: .18em; color: var(--ink-2); }
+.ident__lamp {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(27, 30, 28, .22);
+  transition: background .4s var(--ease), box-shadow .4s var(--ease);
+}
+.ident__lamp.is-live { background: var(--onair); box-shadow: 0 0 9px -1px var(--onair); }
+
+.ident__name {
+  margin: 0; flex: none;
+  font-size: clamp(1rem, 1.5vw, 1.18rem); font-weight: 800;
+  font-variation-settings: "wdth" 118; letter-spacing: -.015em;
+}
+.ident__role {
+  margin: 0; min-width: 0; flex: 1;
+  font-size: 12.5px; color: var(--ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ident__links { margin: 0; display: flex; gap: 14px; flex: none; }
+.ident__links a {
+  font-family: var(--font-m); font-size: 11.5px;
+  border-bottom: 1px solid var(--rule); padding-bottom: 1px;
+  transition: border-color .2s var(--ease), color .2s var(--ease);
+}
+.ident__links a:hover { border-color: var(--onair); color: var(--onair); }
+
+/* ============================================================
+   ON AIR — the current transmission
+   ============================================================ */
+.onair {
   min-height: 100svh;
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
-  gap: clamp(14px, 2.6vh, 30px);
-  padding: 82px var(--edge) 52px;
-  text-align: center;
-}
-.now__kick { margin: 0; font-family: var(--font-m); font-size: 12px; letter-spacing: .24em; text-transform: uppercase; color: var(--text-2); }
-
-.instrument {
-  width: min(560px, 100%);
-  background: var(--panel);
-  -webkit-backdrop-filter: blur(6px) saturate(1.08); backdrop-filter: blur(6px) saturate(1.08);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: clamp(20px, 3.4vw, 34px);
-  box-shadow: 0 24px 70px -30px rgba(0, 0, 0, .7);
-  text-align: left;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: clamp(20px, 4vh, 40px);
+  padding: clamp(96px, 14vh, 150px) var(--edge) clamp(48px, 9vh, 90px);
 }
 
-.clock { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 16px; }
-.clock__time {
-  font-family: var(--font-m); font-weight: 600;
-  font-size: clamp(2.4rem, 8vw, 3.6rem); letter-spacing: -.02em;
-  font-variant-numeric: tabular-nums; line-height: 1;
+.plate {
+  width: min(470px, 100%);
+  background: var(--paper); color: var(--ink);
+  border-radius: 3px;
+  padding: clamp(20px, 2.4vw, 30px);
+  box-shadow: 0 26px 60px -32px rgba(0, 0, 0, .78);
 }
-.clock__place { text-align: right; }
-.clock__city { display: block; font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; }
-.clock__meta { display: block; font-size: 11px; letter-spacing: .12em; color: var(--text-2); text-transform: uppercase; margin-top: 3px; }
-.clock__wx { display: block; font-size: 11px; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; margin-top: 4px; }
-.clock__wx:empty { display: none; }
+.plate__head { display: flex; flex-direction: column; gap: 2px; }
+.plate__k { font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+.plate__place { font-size: 1.16rem; font-weight: 700; font-variation-settings: "wdth" 112; letter-spacing: -.012em; }
+.plate__meta { font-size: 11px; letter-spacing: .06em; color: var(--ink-2); }
 
-.signals { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
-.sig {
-  display: grid; grid-template-columns: 78px 44px 1fr auto; align-items: center;
-  gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--line);
+.plate__clock {
+  margin: 10px 0 18px;
+  font-size: clamp(2.5rem, 7.5vw, 3.5rem); font-weight: 500;
+  letter-spacing: -.045em; font-variant-numeric: tabular-nums; line-height: 1;
 }
-.sig__k { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }
-.sig__icon { font-size: 15px; color: var(--accent); text-align: center; }
-.sig__art {
-  width: 44px; height: 44px; border-radius: 6px; display: grid; place-items: center;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 60%, #000), color-mix(in oklab, var(--accent) 20%, #000));
-  background-size: cover; background-position: center; color: var(--accent-ink); overflow: hidden;
+
+.cues { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.cue {
+  display: grid; grid-template-columns: 92px 1fr auto; align-items: center;
+  gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--rule);
 }
-.sig__art i { font-size: 15px; font-style: normal; opacity: .8; }
-.sig__art.has-art i { display: none; }
-.sig__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.sig__title { font-weight: 600; font-size: 1.02rem; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sig__sub { font-size: 11px; letter-spacing: .04em; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sig__stamp { font-size: 10px; letter-spacing: .06em; color: var(--text-2); white-space: nowrap; }
-.sig--empty .sig__title { color: var(--text-2); font-weight: 500; }
+.cue:has(.cue__art) { grid-template-columns: 92px 38px 1fr auto; }
+.cue__k { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+/* The record turns at 33⅓ rpm — 1.8s a revolution, the real speed rather than
+   one that looked right. Same rule the clock and the sun are held to. */
+@keyframes spin { to { transform: rotate(1turn); } }
 
-.instrument__fresh { margin: 16px 0 0; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }
-
-.statement {
-  margin: 0; max-width: 30ch;
-  font-size: clamp(1.3rem, 2.9vw, 1.9rem); font-weight: 600; line-height: 1.22; letter-spacing: -.02em;
+.cue__art {
+  position: relative;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(27, 30, 28, .09); background-size: cover; background-position: center;
+  box-shadow: inset 0 0 0 1px rgba(27, 30, 28, .14);
 }
-.statement em { font-style: italic; color: var(--accent); }
-
-.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-.actions a {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 10px 18px; border: 1px solid var(--line); border-radius: 999px;
-  font-weight: 600; font-size: .95rem;
-  transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease);
+/* The spindle hole. Without it a spinning circle is a loading spinner; with it
+   the thing on the turntable is a record. */
+.cue__art::after {
+  content: ""; position: absolute; inset: 0; margin: auto;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px rgba(27, 30, 28, .18);
 }
-.actions a span { font-size: 10px; letter-spacing: .1em; color: var(--text-2); transition: color .2s var(--ease); }
-.actions a:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.actions a:hover span { color: var(--accent-ink); }
+/* Only while it is genuinely playing. A track that ended hours ago is a record
+   sitting still on the platter, and spinning it would be the same lie as the
+   on-air lamp glowing on stale data. */
+.cue__art.is-spinning { animation: spin 1.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .cue__art.is-spinning { animation: none; }
+}
+.cue__body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cue__title { font-weight: 600; font-size: .99rem; letter-spacing: -.008em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cue__sub { font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cue__stamp { font-size: 10px; color: var(--ink-2); white-space: nowrap; }
+.cue--empty .cue__title { color: var(--ink-2); font-weight: 400; }
 
-.scrollcue { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--text-2); }
+/* The turntable's position, riding the row's own bottom rule. Oxblood is
+   reserved for genuinely live data, and a track mid-play is exactly that. */
+.cue.has-playhead { position: relative; }
+.cue.has-playhead::after {
+  content: ""; position: absolute; left: 0; bottom: -1px;
+  width: 100%; height: 1px;
+  background: var(--onair);
+  /* scaleX rather than width: this runs once a second for the length of a
+     track, and only transform stays off the layout path. */
+  transform: scaleX(var(--playhead, 0)); transform-origin: left center;
+  transition: transform 1s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cue.has-playhead::after { transition: none; }
+}
+
+.plate__fresh { margin: 14px 0 0; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); }
+.plate__fresh:empty { display: none; }
+.plate__cue {
+  margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--rule);
+  font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2);
+}
 
 /* ============================================================
-   CONTENT BANDS — calmer ground beneath the sky
+   BANDS — translucent ground, and contrast still provable
+
+   The room is fixed behind the whole document, so an opaque band was a lid on
+   it: everything below the fold was read against a flat colour and the room
+   only existed at the top of the page. The bands now sit at BAND_ALPHA, and
+   check-contrast.mjs derives --text and --text-2 against the *composite* —
+   band over the brightest and darkest room the shader can put behind it —
+   rather than against the band alone. Translucency here costs contrast, so it
+   is spent from a budget that is measured.
    ============================================================ */
-.band { max-width: var(--maxw); margin: 0 auto; padding: clamp(64px, 11vh, 128px) var(--edge); }
-.band__head { margin-bottom: clamp(28px, 5vh, 52px); }
-.band__title { margin: 0; font-size: clamp(2rem, 6vw, 3.4rem); font-weight: 700; letter-spacing: -.03em; }
-.band__note { margin: 8px 0 0; font-size: 12px; letter-spacing: .08em; color: var(--text-2); }
-
-/* WORK — editorial list, not cards */
-.works { list-style: none; margin: 0; padding: 0; }
-.work {
-  display: grid; grid-template-columns: 230px 1fr; gap: clamp(16px, 4vw, 56px);
-  padding: clamp(24px, 4vh, 40px) 0; border-top: 1px solid var(--line);
+.band {
+  position: relative;
+  background: var(--band-a);
+  padding: clamp(64px, 11vh, 124px) var(--edge);
 }
-.works .work:last-child { border-bottom: 1px solid var(--line); }
-.work__meta { display: flex; flex-direction: column; gap: 4px; font-size: 12px; letter-spacing: .04em; color: var(--text-2); }
-.work__year { color: var(--accent); }
-.work__name { margin: 0 0 10px; font-size: clamp(1.3rem, 3vw, 1.9rem); font-weight: 700; letter-spacing: -.02em; }
-.work__desc { margin: 0 0 14px; max-width: 62ch; color: var(--text); }
-.tags { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
-.tags li { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+/* The scene crosses between light and dark once each morning and evening.
+   Easing the crossing makes it read as the room changing rather than as the
+   page repainting. Colour stays correct under reduced-motion; only the
+   transition goes away. */
+body, .band, .foot { transition: background-color 1.4s linear, color 1.4s linear; }
+@media (prefers-reduced-motion: reduce) {
+  body, .band, .foot { transition: none; }
+}
+.band > * { max-width: var(--maxw); margin-inline: auto; }
+.band__head { margin-bottom: clamp(30px, 5vh, 56px); }
+.band__title {
+  margin: 0; font-size: clamp(2.1rem, 6vw, 3.6rem); font-weight: 800;
+  font-variation-settings: "wdth" 120; letter-spacing: -.035em; line-height: 1.02;
+  text-wrap: balance;
+}
+.band__note { margin: 10px 0 0; font-size: 12px; letter-spacing: .05em; color: var(--text-2); }
 
-/* RECORD — mono-dated time column */
-.record { list-style: none; margin: 0; padding: 0; }
-.rec { display: grid; grid-template-columns: 160px 1fr; gap: clamp(16px, 4vw, 48px); padding: clamp(20px, 3.4vh, 34px) 0; border-top: 1px solid var(--line); }
-.record .rec:last-child { border-bottom: 1px solid var(--line); }
-.rec__time { font-size: 12px; letter-spacing: .04em; color: var(--text-2); padding-top: 4px; }
-.rec__role { margin: 0 0 4px; font-size: clamp(1.15rem, 2.6vw, 1.6rem); font-weight: 700; letter-spacing: -.015em; }
-.rec__co { color: var(--accent); font-weight: 700; }
-.rec__where { margin: 0 0 10px; font-size: 12px; letter-spacing: .05em; color: var(--text-2); }
-.rec__desc { margin: 0; max-width: 64ch; }
+/* SEGMENTS */
+.segs { list-style: none; margin: 0; padding: 0; }
+.seg {
+  display: grid; grid-template-columns: 210px 1fr; gap: clamp(16px, 4vw, 52px);
+  padding: clamp(24px, 4vh, 38px) 0;
+  border-top: 1px solid color-mix(in oklab, var(--text-2) 42%, transparent);
+}
+.seg__meta { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-2); }
+.seg__year { color: var(--text); font-weight: 500; }
+.seg__name { margin: 0 0 10px; font-size: clamp(1.25rem, 2.8vw, 1.8rem); font-weight: 700; font-variation-settings: "wdth" 108; letter-spacing: -.022em; }
+.seg__desc { margin: 0 0 14px; max-width: 68ch; }
+.tags { list-style: none; display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; }
+.tags li { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-2); border: 1px solid color-mix(in oklab, var(--text-2) 40%, transparent); border-radius: 2px; padding: 3px 9px; }
 
-/* STORY */
-.story { display: grid; grid-template-columns: 1.3fr 1fr; gap: clamp(28px, 6vw, 72px); }
-.story__prose p { margin: 0 0 1.1em; max-width: 60ch; font-size: 1.08rem; }
-.link-cta { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; font-weight: 700; color: var(--accent); border-bottom: 1px solid transparent; transition: border-color .2s var(--ease); }
-.link-cta:hover { border-color: var(--accent); }
-.story__spec { display: flex; flex-direction: column; gap: 26px; }
-.spec__h { margin: 0 0 12px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }
-.spec__line { margin: 0 0 8px; font-size: .98rem; }
-.chips { list-style: none; display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; }
-.chips li { font-size: 11px; letter-spacing: .04em; border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; color: var(--text-2); }
+/* THE RECORD */
+.log { list-style: none; margin: 0; padding: 0; }
+.entry {
+  display: grid; grid-template-columns: 170px 1fr; gap: clamp(16px, 4vw, 48px);
+  padding: clamp(20px, 3.4vh, 32px) 0;
+  border-top: 1px solid color-mix(in oklab, var(--text-2) 42%, transparent);
+}
+.entry__time { font-size: 12px; color: var(--text-2); padding-top: 5px; }
+.entry__role { margin: 0 0 4px; font-size: clamp(1.1rem, 2.4vw, 1.5rem); font-weight: 700; font-variation-settings: "wdth" 108; letter-spacing: -.018em; }
+.entry__co { color: var(--text-2); font-weight: 500; }
+.entry__where { margin: 0 0 10px; font-size: 12px; color: var(--text-2); }
+.entry__desc { margin: 0; max-width: 68ch; }
+
+/* BETWEEN RECORDS */
+.talk { display: grid; grid-template-columns: 1.35fr 1fr; gap: clamp(28px, 6vw, 68px); }
+.talk__prose p { margin: 0 0 1.15em; max-width: 68ch; font-size: 1.06rem; }
+.talk__spec { display: flex; flex-direction: column; gap: 26px; }
+.spec__h { margin: 0 0 11px; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }
+.spec__line { margin: 0 0 8px; font-size: .97rem; }
+.spec__line .muted { color: var(--text-2); }
+.chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
+.chips li { font-size: 11px; border: 1px solid color-mix(in oklab, var(--text-2) 40%, transparent); border-radius: 2px; padding: 4px 8px; color: var(--text-2); }
 .langs { list-style: none; margin: 0; padding: 0; }
-.langs li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
-.langs b { color: var(--accent); font-weight: 600; }
+.langs li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid color-mix(in oklab, var(--text-2) 30%, transparent); font-size: 12px; }
+.langs b { font-weight: 500; }
 
-/* CONTACT */
-.contact { text-align: center; }
-.contact__h { margin: 0; font-size: clamp(2.6rem, 9vw, 5.2rem); font-weight: 800; letter-spacing: -.04em; line-height: .95; }
-.contact__sub { margin: 16px auto 40px; max-width: 44ch; color: var(--text-2); font-size: 1.05rem; }
-.contact__links { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
-.clink { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 20px 26px; border: 1px solid var(--line); border-radius: 12px; min-width: 240px; transition: border-color .2s var(--ease), background .2s var(--ease); }
-.clink:hover { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 10%, transparent); }
-.clink__k { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }
-.clink__v { font-size: 1.1rem; font-weight: 600; }
+/* THE LINE'S OPEN */
+.close { text-align: center; }
+.close__h { margin: 0; font-size: clamp(2.4rem, 8.5vw, 5.4rem); font-weight: 800; font-variation-settings: "wdth" 122; letter-spacing: -.042em; line-height: .96; text-wrap: balance; }
+.close__sub { margin: 16px auto 38px; max-width: 46ch; color: var(--text-2); font-size: 1.04rem; }
+.close__links { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.line {
+  display: flex; flex-direction: column; gap: 5px; align-items: flex-start; text-align: left;
+  padding: 18px 24px; min-width: 230px;
+  background: var(--paper); color: var(--ink); border-radius: 3px;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+.line:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .8); }
+.line__k { font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); }
+.line__v { font-size: 1.06rem; font-weight: 600; }
 
-.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; max-width: var(--maxw); margin: 0 auto; padding: 28px var(--edge) 44px; font-size: 11px; letter-spacing: .08em; color: var(--text-2); border-top: 1px solid var(--line); }
-
-/* ---------- reveal (final state visible; entrance added by JS) ---------- */
-.js .reveal { opacity: 0; transform: translateY(14px); }
+.foot {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px;
+  background: var(--band-a);
+  padding: 26px var(--edge) 40px;
+  font-size: 11px; letter-spacing: .06em; color: var(--text-2);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .js .reveal { opacity: 1; transform: none; }
+  .line:hover { transform: none; }
 }
 
 /* ---------- responsive ---------- */
-@media (max-width: 720px) {
-  .sig { grid-template-columns: 60px 36px 1fr; grid-template-areas: "k art body" "stamp stamp stamp"; row-gap: 4px; }
-  .sig__k { grid-area: k; } .sig__body { grid-area: body; } .sig__stamp { grid-area: stamp; padding-left: 74px; }
-  .sig__icon { display: none; }
-  .work, .rec, .story { grid-template-columns: 1fr; gap: 12px; }
-  .clock { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .clock__place { text-align: left; }
+@media (max-width: 860px) {
+  .talk, .seg, .entry { grid-template-columns: 1fr; gap: 12px; }
+  .ident__role { display: none; }
 }
+@media (max-width: 620px) {
+  .ident { flex-wrap: wrap; gap: 10px 12px; padding: 9px var(--edge); }
+  .ident__body { gap: 10px; flex: 1 1 100%; order: 2; }
+  .ident__links { order: 3; flex: 1 1 100%; }
+  .cue { grid-template-columns: 1fr auto; grid-template-areas: "k stamp" "body body"; row-gap: 2px; }
+  .cue:has(.cue__art) { grid-template-columns: 38px 1fr auto; grid-template-areas: "art k stamp" "art body body"; column-gap: 10px; }
+  .cue__k { grid-area: k; } .cue__body { grid-area: body; }
+  .cue__stamp { grid-area: stamp; } .cue__art { grid-area: art; align-self: center; }
+  .plate__clock { font-size: clamp(2.2rem, 13vw, 3rem); }
+}
+
+/* Empty sub-lines collapse: the title already carries the empty state. */
+.cue__sub:empty { display: none; }

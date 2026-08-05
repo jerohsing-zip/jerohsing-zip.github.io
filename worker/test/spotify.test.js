@@ -83,6 +83,7 @@ const TOKEN_OK = { access_token: "access-1", expires_in: 3600 };
 const TRACK = {
   type: "track",
   name: "Caravan",
+  duration_ms: 351000,
   artists: [{ name: "John Wasson" }, { name: "Studio Band" }],
   album: {
     name: "Whiplash (Original Motion Picture Soundtrack)",
@@ -109,7 +110,7 @@ const noRecent = () => jsonResponse({ items: [] });
 describe("getTrack", () => {
   it("returns the currently playing track", async () => {
     stubSpotify({
-      current: () => jsonResponse({ is_playing: true, item: TRACK }),
+      current: () => jsonResponse({ is_playing: true, progress_ms: 42000, item: TRACK }),
       recent: noRecent
     });
 
@@ -121,12 +122,27 @@ describe("getTrack", () => {
       art: "https://i.scdn.co/image/big",
       url: "https://open.spotify.com/track/abc",
       nowPlaying: true,
-      period: null
+      period: null,
+      progressMs: 42000,
+      durationMs: 351000
     });
     expect(Date.parse(t.at)).not.toBeNaN();
     expect(Object.keys(t).sort()).toEqual(
-      ["album", "art", "artist", "at", "nowPlaying", "period", "title", "url"]
+      ["album", "art", "artist", "at", "durationMs", "nowPlaying", "period", "progressMs", "title", "url"]
     );
+  });
+
+  /* The playhead is only true of something actually playing. On the
+     recently-played fallback it must be null, not a stale position. */
+  it("carries no playhead on the recently-played fallback", async () => {
+    stubSpotify({
+      current: () => new Response(null, { status: 204 }),
+      recent: () => jsonResponse({ items: [{ track: TRACK, played_at: "2024-05-01T10:00:00.000Z" }] })
+    });
+
+    const t = await getTrack(ENV);
+    expect(t.nowPlaying).toBe(false);
+    expect(t.progressMs).toBeNull();
   });
 
   it("falls back to the last played track on 204", async () => {

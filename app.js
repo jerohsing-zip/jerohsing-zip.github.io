@@ -1,68 +1,97 @@
 /* ============================================================
-   NOW — live portfolio logic (Motion-driven).
-   · local clock + time-of-day phase, computed from the city tz
-   · reads live.json (scheduled snapshot), re-polls, renders signals
-   · honest empty / stale states; a failed fetch still leaves a
-     complete page (static fallbacks stay in the HTML)
-   Motion pass (confirmed): instrument entrance, phase crossfade,
-   ambient motes + scroll reveals.
+   NIGHT SERVICE — live portfolio logic.
+
+   · the room's light comes from the sun's real position, not the hour
+   · location.json is the only source of where Jerome is (he is itinerant;
+     no city may be hardcoded anywhere in this file)
+   · the Worker owns "on the turntable"; live.json owns the rest
+   · honest empty and stale states throughout — a failed fetch leaves the
+     previous value alone and never renders as a real one
    ============================================================ */
 import { animate, stagger, inView } from "./vendor/motion.js";
-import { createSky } from "./sky.js";
+import { createRoom } from "./room.js";
+import { solarPosition, albumPalette } from "./signals.js";
+import {
+  tokensFor, windowPos, windowI, tungstenI, washGain,
+  TUNGSTEN, BAND_ALPHA, rgb255, rgba255
+} from "./light.js";
 
 (function () {
   "use strict";
+
+  /* ---------- things to replace with real assets ----------
+     Left empty rather than guessed: the previous build shipped a visible
+     "[link TBD]" pointing at the bare linkedin.com homepage, and a dead link
+     is worse than no link. Set this and the row renders itself. */
+  var LINKEDIN_URL = "https://www.linkedin.com/in/jeromehsing/";
+  var RESUME_URL = "assets/resume.pdf";
+
+  var SPOTIFY_URL = "https://now-spotify.jerohsing.workers.dev";
+
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var $ = function (s, r) { return (r || document).querySelector(s); };
-  var loc = { city: "Tokyo", tz: "Asia/Tokyo" };
 
-  /* ---------- continuous time-of-day color (24h curve) ----------
-     Color keyframes around the clock; the sky interpolates between them,
-     so it's always the exact color for the exact local time (no phase cuts).
-     Each keyframe is [deep, mid, warm light-source] as 0..1 rgb. */
-  var KEYS = [
-    { h: 0.0,  c: [[0.024, 0.024, 0.059], [0.078, 0.082, 0.227], [0.910, 0.635, 0.306]] }, // deep night, lamp
-    { h: 4.0,  c: [[0.055, 0.047, 0.118], [0.141, 0.122, 0.259], [0.788, 0.545, 0.690]] }, // pre-dawn violet
-    { h: 6.5,  c: [[0.180, 0.153, 0.251], [0.357, 0.306, 0.431], [0.949, 0.635, 0.549]] }, // dawn rose
-    { h: 9.0,  c: [[0.682, 0.761, 0.855], [0.847, 0.878, 0.902], [1.000, 0.851, 0.627]] }, // morning
-    { h: 13.0, c: [[0.776, 0.835, 0.902], [0.918, 0.906, 0.855], [1.000, 0.906, 0.745]] }, // midday
-    { h: 16.5, c: [[0.604, 0.525, 0.627], [0.878, 0.722, 0.588], [0.969, 0.694, 0.369]] }, // golden hour
-    { h: 18.5, c: [[0.243, 0.137, 0.251], [0.478, 0.243, 0.369], [0.961, 0.522, 0.306]] }, // dusk
-    { h: 21.0, c: [[0.055, 0.047, 0.180], [0.106, 0.114, 0.267], [0.910, 0.620, 0.340]] }  // into night
-  ];
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function smooth(t) { return t * t * (3 - 2 * t); }
-  function colorsAt(hf) {
-    var n = KEYS.length;
-    for (var i = 0; i < n; i++) {
-      var a = KEYS[i], b = KEYS[(i + 1) % n];
-      var h0 = a.h, h1 = (i === n - 1) ? b.h + 24 : b.h;
-      var hh = (i === n - 1 && hf < h0) ? hf + 24 : hf;
-      if (hh >= h0 && hh <= h1) {
-        var t = smooth((hh - h0) / (h1 - h0)), out = [];
-        for (var j = 0; j < 3; j++) out.push([
-          lerp(a.c[j][0], b.c[j][0], t), lerp(a.c[j][1], b.c[j][1], t), lerp(a.c[j][2], b.c[j][2], t)
-        ]);
-        return out;
+  /* No default location. Until location.json (or live.json) resolves, the
+     page honestly reports that it does not know where the signal is coming
+     from — the alternative is a stale city on a page whose whole claim is
+     that it is true right now. */
+  var loc = null;
+  var coord = null;
+
+  var room = null;
+  var lightInit = false;
+
+  /* The sky the room is currently under. Held rather than passed straight to
+     the shader because cloud is part of the light model now, not a filter on
+     top of it — the ambient wall is computed from the sun *and* the cloud, and
+     the sun moves every second while the weather arrives every fifteen
+     minutes. Null until Open-Meteo answers: a clear sky is a claim, and this
+     page does not make claims it has not been told. */
+  var sky = { cloud: 0, wet: 0, fog: 0, haze: 0, wind: [0, 0] };
+
+  /* The light model lives in light.js so scripts/check-contrast.mjs can sweep
+     every solar altitude and prove these tokens clear WCAG, rather than us
+     asserting it for the two hours we happened to look at. */
+  var lastTokens = "";
+  function applyLight(alt, az, lat) {
+    var t = tokensFor(alt, sky.cloud);
+    var band = rgb255(t.band), text = rgb255(t.text), text2 = rgb255(t.text2);
+    var key = t.scene + band + text + text2;
+    /* These change over minutes, not seconds. Writing them every tick would
+       repaint every band on the page once a second for nothing. */
+    if (key !== lastTokens) {
+      lastTokens = key;
+      var s = document.documentElement.style;
+      document.documentElement.setAttribute("data-scene", t.scene);
+      s.setProperty("--band", band);
+      /* The bands are translucent so the room stays visible the whole way down
+         the page. --band remains for anything that needs the solid colour. */
+      s.setProperty("--band-a", rgba255(t.band, BAND_ALPHA));
+      s.setProperty("--text", text);
+      s.setProperty("--text-2", text2);
+      /* Only when the shader is absent. With it live these sit underneath a
+         crossfading canvas, and re-colouring them mid-fade is a visible snap. */
+      if (!room) {
+        s.setProperty("--fall-a", rgb255(t.fallA));
+        s.setProperty("--fall-b", rgb255(t.fallB));
       }
     }
-    return KEYS[0].c;
-  }
-  function rgb255(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
-  function rgba255(c, a) { return "rgba(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + "," + a + ")"; }
-  function lum(c) { return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]; }
-  function scale3(c, k) { return [c[0] * k, c[1] * k, c[2] * k]; }
 
-  var sky = null;   // WebGL field (null → CSS-gradient fallback)
-  var skyFront = null;
-  function buildSky() {
-    var host = $(".sky");
-    if (!host) return;
-    skyFront = document.createElement("div"); skyFront.className = "sky__layer";
-    host.insertBefore(skyFront, host.firstChild);
+    if (room) {
+      room.setLight({
+        win: windowPos(alt, az, lat),
+        winI: windowI(alt),
+        light: t.light,
+        room: t.room,
+        warm: TUNGSTEN,
+        warmI: tungstenI(alt),
+        washGain: washGain(alt)
+      }, !lightInit);
+    }
+    lightInit = true;
   }
 
-  /* ---------- time + phase ---------- */
+  /* ---------- clock ---------- */
   function partsIn(tz) {
     var p = new Intl.DateTimeFormat("en-GB", {
       timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"
@@ -75,41 +104,11 @@ import { createSky } from "./sky.js";
         .formatToParts(new Date()).find(function (x) { return x.type === "timeZoneName"; }).value;
     } catch (e) { return ""; }
   }
-  function phaseOf(h) {
-    if (h >= 5 && h < 8) return "dawn";
-    if (h >= 8 && h < 17) return "day";
-    if (h >= 17 && h < 20) return "dusk";
-    return "night";
+  function validTz(tz) {
+    if (!tz) return false;
+    try { new Intl.DateTimeFormat("en", { timeZone: tz }); return true; } catch (e) { return false; }
   }
 
-  var colorsInit = false;
-  function applyTokens(cols) {
-    var light = lum(cols[1]) > 0.5;
-    document.documentElement.setAttribute("data-scene", light ? "light" : "dark");
-    var ui = light ? scale3(cols[2], 0.5) : cols[2];   // keep the UI accent legible on light scenes
-    var s = document.documentElement.style;
-    s.setProperty("--accent", rgb255(ui));
-    s.setProperty("--accent-ink", light ? "#FFF8EC" : "#14100A");
-  }
-  function paintSky(cols, immediate) {
-    if (sky) { sky.setPhase(cols, immediate); return; }   // WebGL field lerps toward the new colors
-    if (!skyFront) return;                                 // CSS-gradient fallback (no-WebGL / reduced)
-    skyFront.style.background =
-      "radial-gradient(70vmax 55vmax at 72% 12%, " + rgba255(cols[2], 0.14) + ", transparent 60%)," +
-      "linear-gradient(178deg, " + rgb255(cols[1]) + ", " + rgb255(cols[0]) + " 82%)";
-  }
-  function tick() {
-    var t = partsIn(loc.tz);
-    var clock = $("[data-clock]"); if (clock) clock.textContent = t.hh + ":" + t.m + ":" + t.s;
-    var fc = $("[data-foot-clock]"); if (fc) fc.textContent = t.hh + ":" + t.m;
-    var hf = t.h + (+t.m) / 60 + (+t.s) / 3600;
-    var cols = colorsAt(hf);
-    paintSky(cols, !colorsInit); colorsInit = true;
-    applyTokens(cols);
-    var dp = $("[data-daypart]"); if (dp) dp.textContent = phaseOf(t.h);   // human label only
-  }
-
-  /* ---------- relative time ---------- */
   function ago(iso) {
     if (!iso) return "";
     var d = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -123,106 +122,163 @@ import { createSky } from "./sky.js";
   }
   function setText(sel, val) { var el = $(sel); if (el && val != null) el.textContent = val; }
 
-  /* ---------- render signals ---------- */
-  function validTz(tz) {
-    if (!tz) return false;
-    try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return true; } catch (e) { return false; }
+  function tick() {
+    drawPlayhead();
+    if (!loc || !validTz(loc.tz)) return;
+    var t = partsIn(loc.tz);
+    setText("[data-clock]", t.hh + ":" + t.m + ":" + t.s);
+
+    if (coord) {
+      var sun = solarPosition(coord.lat, coord.lon, new Date());
+      applyLight(sun.altitude, sun.azimuth, coord.lat);
+    }
   }
+
+  /* ---------- renders ---------- */
   function renderLocation(l) {
-    if (!l) return;
-    if (l.city) loc.city = l.city;
-    if (validTz(l.tz)) loc.tz = l.tz;
-    setText("[data-city]", loc.city);
-    setText("[data-tz]", tzShort(loc.tz) || "");
-    var fp = $("[data-foot-place]");
-    if (fp && fp.childNodes[0]) fp.childNodes[0].nodeValue = loc.city + " · ";
+    loc = l;
+    setText("[data-city]", l.city + (l.region ? ", " + l.region : ""));
+    setText("[data-tz]", tzShort(l.tz));
+    var f = $("[data-foot-place]");
+    if (f) f.textContent = l.city;
     tick();
     loadWeather();
   }
+
+  /* The record throws its colour across the room, but only while it is
+     actually playing — a track that ended hours ago should not still be
+     colouring the walls.
+
+     Held here because the first track usually arrives before the room exists:
+     the room cannot be built until geocoding says where it is, so the sleeve
+     colour has to be re-applied once it does. */
+  var lastListen = null;
+  function applyWash(d) {
+    if (!room) return;
+    if (!d || !d.art) { room.setWash(null); return; }
+    albumPalette(d.art)
+      .then(function (p) { room.setWash(p, d.nowPlaying ? 1 : 0.7); })
+      .catch(function () { room.setWash(null); });
+  }
+
+  var playhead = null;
+  function drawPlayhead() {
+    var row = $('[data-sig="listen"]');
+    if (!row) return;
+    if (!playhead) { row.classList.remove("has-playhead"); return; }
+    var p = (playhead.progress + (Date.now() - playhead.at)) / playhead.duration;
+    if (p >= 1) {                       // the track ended; the next poll says what followed
+      playhead = null; row.classList.remove("has-playhead"); return;
+    }
+    row.classList.add("has-playhead");
+    row.style.setProperty("--playhead", Math.max(0, p).toFixed(4));
+  }
+
   function renderListen(d) {
     var row = $('[data-sig="listen"]'), art = $("[data-art]");
     if (!d || !d.title) {
-      if (row) row.classList.add("sig--empty");
-      setText("[data-listen-title]", "quiet right now"); setText("[data-listen-artist]", "no track");
-      setText('[data-stamp="listen"]', ""); return;
+      if (row) row.classList.add("cue--empty");
+      playhead = null; drawPlayhead();
+      setText("[data-listen-title]", "nothing spinning");
+      setText("[data-listen-artist]", "");
+      setText('[data-stamp="listen"]', "");
+      if (art) { art.style.backgroundImage = ""; art.classList.remove("has-art", "is-spinning"); }
+      lastListen = null; applyWash(null);
+      return;
     }
-    if (row) row.classList.remove("sig--empty");
-    setText("[data-listen-title]", d.title); setText("[data-listen-artist]", d.artist || "");
+    if (row) row.classList.remove("cue--empty");
+    setText("[data-listen-title]", d.title);
+    setText("[data-listen-artist]", d.artist || "");
+    setText('[data-stamp="listen"]', d.nowPlaying ? "now" : ago(d.at));
+
     if (art && d.art) { art.style.backgroundImage = 'url("' + d.art + '")'; art.classList.add("has-art"); }
     else if (art) { art.style.backgroundImage = ""; art.classList.remove("has-art"); }
-    setText('[data-stamp="listen"]', d.nowPlaying ? "now" : ago(d.at));
+    /* Keyed on nowPlaying rather than on the artwork: a track with no sleeve is
+       still a record, and it is still turning. */
+    if (art) art.classList.toggle("is-spinning", !!d.nowPlaying);
+
+    /* The turntable's position. A record has one, and showing it is the
+       difference between "a song is playing" and "this is happening right
+       now" — it advances between polls instead of sitting still for 30s. */
+    playhead = (d.nowPlaying && d.progressMs != null && d.durationMs)
+      ? { at: Date.now(), progress: d.progressMs, duration: d.durationMs }
+      : null;
+    drawPlayhead();
+
+    lastListen = d;
+    applyWash(d);
   }
+
   function renderPlay(d) {
     var row = $('[data-sig="play"]');
     if (!d || !d.title) {
-      if (row) row.classList.add("sig--empty");
-      setText("[data-play-title]", "not playing lately"); setText("[data-play-platform]", "—");
-      setText("[data-play-hours]", "0h"); setText('[data-stamp="play"]', ""); return;
+      if (row) row.classList.add("cue--empty");
+      setText("[data-play-title]", "nothing this week");
+      setText("[data-play-platform]", "");
+      setText('[data-stamp="play"]', ""); return;
     }
-    if (row) row.classList.remove("sig--empty");
-    setText("[data-play-title]", d.title); setText("[data-play-platform]", d.platform || "");
-    setText("[data-play-hours]", (d.hoursThisWeek != null ? d.hoursThisWeek : "?") + "h");
+    if (row) row.classList.remove("cue--empty");
+    setText("[data-play-title]", d.title);
+    setText("[data-play-platform]", (d.platform || "") + (d.hoursThisWeek != null ? " · " + d.hoursThisWeek + "h" : ""));
     setText('[data-stamp="play"]', d.period === "week" ? "this week" : ago(d.at));
   }
+
   function renderShip(d) {
     var row = $('[data-sig="ship"]');
     if (!d || !d.message) {
-      if (row) row.classList.add("sig--empty");
-      setText("[data-ship-title]", "a quiet week for code"); setText("[data-ship-repo]", "—");
+      if (row) row.classList.add("cue--empty");
+      setText("[data-ship-title]", "quiet on the wire");
+      setText("[data-ship-repo]", "");
       setText('[data-stamp="ship"]', ""); return;
     }
-    if (row) row.classList.remove("sig--empty");
-    setText("[data-ship-title]", d.message); setText("[data-ship-repo]", (d.repo || "").split("/").pop());
+    if (row) row.classList.remove("cue--empty");
+    setText("[data-ship-title]", d.message);
+    setText("[data-ship-repo]", d.repo || "");
     setText('[data-stamp="ship"]', ago(d.at));
   }
+
   function renderFresh(iso) {
-    var el = $("[data-fresh]"); if (!el) return;
-    el.textContent = iso ? "updated " + ago(iso) : "last-known data";
-  }
-  function renderSignals(data) {
-    /* listening deliberately absent — the Worker owns it (loadListening) */
-    renderPlay(data.playing);
-    renderShip(data.shipping); renderFresh(data.fetchedAt);
+    setText("[data-fresh]", iso ? "snapshot " + ago(iso) : "last-known snapshot");
   }
 
-  /* ---------- listening (live) ----------
-     Owned entirely by the now-spotify Worker, not by live.json — a track
-     changes every few minutes and the 20-minute cron could never keep up.
-     Paste the deployed Worker URL here; see worker/README.md step 7.
-     Left as the placeholder, the card just keeps its static HTML. */
-  var SPOTIFY_URL = "https://now-spotify.jerohsing.workers.dev";
+  /* ---------- the on-air lamp ----------
+     Oxblood is reserved for genuinely live data. When the Worker is
+     unreachable the lamp goes dark and says so; it never glows on stale data. */
+  var lastLive = 0;
+  function setLive(ok) {
+    if (ok) lastLive = Date.now();
+    var live = Date.now() - lastLive < 120000;
+    var lamp = $("[data-lamp]");
+    if (lamp) lamp.classList.toggle("is-live", live);
+    setText("[data-onair]", live ? "ON AIR" : "NO SIGNAL");
+  }
 
+  /* ---------- data ---------- */
   function loadListening() {
-    if (SPOTIFY_URL.indexOf("CHANGE-ME") !== -1) { renderListen(null); return; }
     fetch(SPOTIFY_URL, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function (d) { renderListen(d); })
-      /* A failed fetch leaves the previous render alone. Showing
-         "quiet right now" because the Worker is down would be a lie. */
-      .catch(function () {});
+      .then(function (d) { renderListen(d); setLive(true); })
+      /* A failed fetch leaves the previous render alone. Showing "nothing
+         spinning" because the Worker is down would be a lie. */
+      .catch(function () { setLive(false); });
   }
 
-  /* ---------- data ----------
-     location.json is the hand-edited source of truth for where Jerome is;
-     live.json's location only fills in if location.json is missing/invalid. */
-  var locSet = false;
   function load() {
     fetch("location.json", { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (l) { if (l && validTz(l.tz)) { renderLocation(l); locSet = true; } })
+      .then(function (l) { if (l && l.city && validTz(l.tz)) renderLocation(l); })
       .catch(function () {});
+
     fetch("live.json", { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (data) {
-        renderSignals(data);
-        if (!locSet && data.location) renderLocation(data.location);
+        renderPlay(data.playing); renderShip(data.shipping); renderFresh(data.fetchedAt);
+        if (!loc && data.location && validTz(data.location.tz)) renderLocation(data.location);
       })
       .catch(function () { renderFresh(null); });
   }
 
-  /* ---------- weather (Open-Meteo — free, no API key, CORS-ok) ----------
-     Subtle color-only effect: cloud cover mutes/dims the sky, rain cools it,
-     fog hazes it. A word ("18° · light rain") lands in the readout. */
+  /* ---------- weather ---------- */
   var WMO = {
     0: "clear", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
     45: "fog", 48: "freezing fog", 51: "light drizzle", 53: "drizzle", 55: "heavy drizzle",
@@ -231,97 +287,166 @@ import { createSky } from "./sky.js";
     77: "snow grains", 80: "light showers", 81: "showers", 82: "heavy showers",
     85: "snow showers", 86: "snow showers", 95: "thunderstorm", 96: "thunderstorm", 99: "thunderstorm"
   };
-  function isWet(code) { return (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95; }
-  function isSnow(code) { return (code >= 71 && code <= 77) || code === 85 || code === 86; }
+  function isWet(c) { return (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95; }
+  function isSnow(c) { return (c >= 71 && c <= 77) || c === 85 || c === 86; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
-  function applyWeather(code, cloud, temp) {
-    if (sky) sky.setWeather({
-      cloud: (cloud != null ? cloud : 0) / 100,
-      wet: isWet(code) ? 0.85 : (isSnow(code) ? 0.4 : 0),
-      fog: (code === 45 || code === 48) ? 0.85 : 0
-    });
-    var el = $("[data-wx]");
-    if (el) el.textContent = (temp != null ? Math.round(temp) + "° · " : "") + (WMO[code] || "");
+  /* The code says what kind of weather it is; `precipitation` says how much of
+     it there is. On the code alone a passing drizzle lit the room like a
+     downpour, which is the same failure as a hardcoded city — a plausible
+     value standing in for the real one. mm in the last hour: a tenth is barely
+     falling, four is heavy. Snow is wet light too, just softer and slower. */
+  function wetness(cur) {
+    var mm = cur.precipitation != null ? cur.precipitation : 0;
+    var base = isWet(cur.weather_code) ? 0.40 : (isSnow(cur.weather_code) ? 0.20 : 0);
+    if (!base && mm <= 0) return 0;
+    return clamp01(base + Math.min(1, Math.pow(mm / 4, 0.6)) * 0.55);
   }
 
-  var wxCity = null, wxCoord = null;
-  function fetchWx(coord) {
-    fetch("https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code,cloud_cover&latitude=" + coord.lat + "&longitude=" + coord.lon)
+  /* Damp air scatters light before it reaches the wall. Below about 60% the
+     air is optically clear and this is nothing; above it the window stops
+     having an edge. Fog is its own field and takes over past that. */
+  function haziness(cur) {
+    if (cur.relative_humidity_2m == null) return 0;
+    return clamp01((cur.relative_humidity_2m - 60) / 38);
+  }
+
+  function applyWeather(cur) {
+    /* Meteorological direction is where the wind comes *from*; the room
+       needs the direction it is going. */
+    var going = ((cur.wind_direction_10m || 0) + 180) * Math.PI / 180;
+    var speed = Math.min(1, (cur.wind_speed_10m || 0) / 40);
+    sky = {
+      cloud: (cur.cloud_cover != null ? cur.cloud_cover : 0) / 100,
+      wet: wetness(cur),
+      fog: (cur.weather_code === 45 || cur.weather_code === 48) ? 0.85 : 0,
+      haze: haziness(cur),
+      wind: [Math.sin(going) * speed, Math.cos(going) * speed]
+    };
+    if (room) room.setWeather(sky);
+    /* Cloud is in the ambient now, so a change in the sky changes the room and
+       the page's own tokens — not just the glass. */
+    tick();
+
+    var el = $("[data-wx]");
+    if (el) {
+      var word = WMO[cur.weather_code] || "";
+      el.textContent = cur.temperature_2m != null
+        ? " · " + Math.round(cur.temperature_2m) + "° " + word
+        : (word ? " · " + word : "");
+    }
+  }
+
+  /* Every field here has a job, and the same rule the Worker is held to
+     applies: nothing is requested that nothing renders.
+       temperature_2m       → the readout beside the city
+       weather_code         → the word, and what kind of wet
+       cloud_cover          → the room's ambient, via cloudedRoom()
+       wind_speed/direction → which way the wash and the rain drift
+       relative_humidity_2m → haze; how far the window's light carries
+       precipitation        → how hard it is actually raining */
+  var CURRENT = "temperature_2m,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,relative_humidity_2m,precipitation";
+  function fetchWx(c) {
+    fetch("https://api.open-meteo.com/v1/forecast?current=" + CURRENT + "&latitude=" + c.lat + "&longitude=" + c.lon)
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { if (j && j.current) applyWeather(j.current.weather_code, j.current.cloud_cover, j.current.temperature_2m); })
+      .then(function (j) { if (j && j.current) applyWeather(j.current); })
       .catch(function () {});
   }
+  var wxCity = null;
   function loadWeather() {
-    var city = loc.city; if (!city) return;
-    if (wxCity === city && wxCoord) { fetchWx(wxCoord); return; }   // cached geocode
-    fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + encodeURIComponent(city))
+    if (!loc || !loc.city) return;
+    if (wxCity === loc.city && coord) { fetchWx(coord); return; }
+    fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + encodeURIComponent(loc.city))
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         if (!j || !j.results || !j.results.length) return;
-        var g = j.results[0]; wxCoord = { lat: g.latitude, lon: g.longitude }; wxCity = city;
-        fetchWx(wxCoord);
+        var g = j.results[0];
+        coord = { lat: g.latitude, lon: g.longitude }; wxCity = loc.city;
+        /* Only now can the room be lit correctly, so only now is it built.
+           Created earlier it would sit at its zero state — an opaque black
+           canvas hiding the CSS fallback — for as long as geocoding took,
+           and forever if geocoding never answered. */
+        ensureRoom();
+        applyWash(lastListen);        // the track almost always beat the room here
+        tick();
+        fetchWx(coord);
       })
       .catch(function () {});
   }
 
-  /* ---------- motion: entrance ---------- */
-  function entrance() {
-    var els = document.querySelectorAll(".now .reveal");
-    if (reduced) { els.forEach(function (e) { e.style.opacity = 1; e.style.transform = "none"; }); return; }
-    animate(els, { opacity: [0, 1], y: [16, 0] },
-      { delay: stagger(0.08, { startDelay: 0.12 }), type: "spring", stiffness: 440, damping: 34 });
+  /* ---------- assets that may not exist yet ---------- */
+  function wireAssets() {
+    var img = $("[data-portrait]"), face = $("[data-face]");
+    if (img && face) {
+      img.addEventListener("load", function () { face.hidden = false; });
+      img.addEventListener("error", function () { face.remove(); });
+      if (img.complete && img.naturalWidth) face.hidden = false;
+    }
+    var r = $("[data-resume]");
+    if (r) r.setAttribute("href", RESUME_URL);
+
+    if (LINKEDIN_URL) {
+      var mk = function (parent, cls, k, v) {
+        var a = document.createElement("a");
+        a.className = cls; a.href = LINKEDIN_URL;
+        a.target = "_blank"; a.rel = "noopener";
+        if (cls === "line") {
+          a.innerHTML = '<span class="line__k mono"></span><span class="line__v"></span>';
+          a.firstChild.textContent = k; a.lastChild.textContent = v;
+        } else { a.textContent = k; }
+        parent.appendChild(a);
+      };
+      var links = $(".ident__links"); if (links) mk(links, "", "LinkedIn");
+      var close = $("[data-contact]"); if (close) mk(close, "line", "LinkedIn", "Profile");
+    }
   }
 
-  /* ---------- motion: scroll reveals for the content bands ---------- */
+  /* ---------- motion: the cold open ----------
+     The room is already correct on the first paint — it does not fade up,
+     because the broadcast did not start when you arrived. The one authored
+     beat is the ident settling in. */
+  function coldOpen() {
+    var els = [$(".ident"), $(".plate")].filter(Boolean);
+    if (reduced || !els.length) return;
+    /* Settles from an already-legible default instead of fading up from
+       nothing. A background tab freezes rAF mid-spring, and the credential
+       must stay readable if this animation never finishes. */
+    animate(els, { opacity: [0.72, 1], y: [12, 0] },
+      { delay: stagger(0.10, { startDelay: 0.06 }), type: "spring", stiffness: 420, damping: 36 });
+  }
+
   function bandReveals() {
     if (reduced) return;
-    var targets = document.querySelectorAll(
-      ".band__head, .work, .rec, .story__prose, .story__spec, .contact__h, .contact__sub, .contact__links"
-    );
+    var targets = document.querySelectorAll(".band__head, .seg, .entry, .talk__prose, .talk__spec, .close__h, .close__sub, .close__links");
     var seen = new WeakSet();
     targets.forEach(function (el) {
-      el.style.opacity = "0"; el.style.transform = "translateY(18px)";
+      el.style.opacity = "0"; el.style.transform = "translateY(16px)";
       inView(el, function () {
         if (seen.has(el)) return; seen.add(el);
-        animate(el, { opacity: [0, 1], y: [18, 0] }, { duration: 0.6, ease: [0.2, 0.8, 0.2, 1] });
+        animate(el, { opacity: [0, 1], y: [16, 0] }, { duration: 0.55, ease: [0.2, 0.8, 0.2, 1] });
       }, { amount: 0.2, margin: "0px 0px -10% 0px" });
     });
   }
 
-  /* ---------- motion: ambient sky motes ---------- */
-  function motes() {
-    var host = $("[data-motes]");
-    if (!host || reduced) return;
-    var n = Math.min(26, Math.round(window.innerWidth / 52));
-    for (var i = 0; i < n; i++) {
-      var m = document.createElement("span"); m.className = "mote";
-      var s = 1 + Math.random() * 2, o = 0.05 + Math.random() * 0.13;
-      m.style.left = (Math.random() * 100) + "%"; m.style.top = (Math.random() * 100) + "%";
-      m.style.width = m.style.height = s + "px"; m.style.opacity = o;
-      host.appendChild(m);
-      animate(m, { y: [0, -26 - Math.random() * 24], opacity: [o, o * 0.25] },
-        { duration: 9 + Math.random() * 11, repeat: Infinity, repeatType: "reverse", ease: "easeInOut", delay: Math.random() * 6 });
-    }
+  /* ---------- start ---------- */
+  function ensureRoom() {
+    if (room || reduced) return;
+    room = createRoom($(".room"));   // null if WebGL is unavailable
   }
 
-  /* ---------- start ---------- */
-  buildSky();                 // CSS-gradient fallback layers
-  if (!reduced) {
-    sky = createSky($(".sky")); // WebGL morphing field (null if unsupported)
-    if (sky) {                  // shader carries its own grain + vignette
-      var gr = $(".sky__grain"); if (gr) gr.style.display = "none";
-      var vg = $(".sky__vignette"); if (vg) vg.style.display = "none";
-    }
-  }
-  tick();                     // sets initial phase immediately (no crossfade)
-  setInterval(tick, 1000);
+  wireAssets();
+  setLive(false);
   load();
-  setInterval(load, 180000);  // re-poll snapshot every 3 min
+  setInterval(load, 180000);
   loadListening();
-  setInterval(loadListening, 30000);   // now-playing, straight from the Worker
-  loadWeather();
-  setInterval(loadWeather, 900000);  // refresh weather every 15 min
-  entrance();
+  setInterval(loadListening, 30000);
+  setInterval(tick, 1000);
+  setInterval(loadWeather, 900000);
+  /* Catch up the moment the tab comes back: throttled timers in a hidden tab
+     otherwise leave a stale clock on screen for up to a minute. */
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) { tick(); loadListening(); load(); }
+  });
+  coldOpen();
   bandReveals();
-  motes();
 })();
