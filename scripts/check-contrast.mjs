@@ -3,7 +3,7 @@
    tokens, then checks the fixed paper surfaces.
    Run: node scripts/check-contrast.mjs */
 import {
-  tokensFor, contrast, relLum, washRoom, washGain, bandGrounds,
+  tokensFor, contrast, relLum, washRoom, washGain, bandGrounds, orderByHue,
   LIGHT, BAND_ALPHA, WASH
 } from "../light.js";
 
@@ -155,6 +155,33 @@ if (worstLift < MARGIN) bad(`the sun still out-votes the record: only ${worstLif
 
 const t0 = tokensFor(0, 0);
 if (relLum(t0.band) > 1 || relLum(t0.band) < 0) bad("band luminance out of range");
+
+/* ---- the strip's colours are the sleeve's ----
+   orderByHue lays the three palette colours across the strip's width. It may
+   reorder them; it may not invent, drop or duplicate one. A rainbow that
+   contains a colour the cover does not is the exact failure this design was
+   drawn to avoid, so the permutation property is checked rather than assumed. */
+const PALETTES = [
+  [[0.9, 0.1, 0.1], [0.1, 0.2, 0.8], [0.2, 0.7, 0.2]],
+  [[0.6, 0.4, 0.2], [0.7, 0.5, 0.3], [0.5, 0.3, 0.15]],   // three shades of rust
+  [[0.5, 0.5, 0.5], [0.9, 0.9, 0.2], [0.1, 0.1, 0.1]]
+];
+const keyOf = (c) => c.map((v) => v.toFixed(6)).join(",");
+for (const p of PALETTES) {
+  const before = p.map(keyOf).sort();
+  const after = orderByHue(p).map(keyOf).sort();
+  if (before.join("|") !== after.join("|")) {
+    bad(`orderByHue is not a permutation of ${JSON.stringify(p)}`);
+  }
+  if (orderByHue(p).length !== 3) bad(`orderByHue returned ${orderByHue(p).length} colours, needs 3`);
+  const copy = JSON.parse(JSON.stringify(p));
+  orderByHue(p);
+  if (JSON.stringify(p) !== JSON.stringify(copy)) bad("orderByHue mutated its argument");
+}
+/* Warm edge to cool edge: a red/green/blue palette must come back red-first. */
+const rgb = orderByHue([[0.1, 0.2, 0.8], [0.2, 0.7, 0.2], [0.9, 0.1, 0.1]]);
+if (keyOf(rgb[0]) !== keyOf([0.9, 0.1, 0.1])) bad("orderByHue did not put the warmest colour first");
+console.log("orderByHue: permutation and warm-first hold");
 
 console.log(fail ? `\n${fail} FAILURE(S)` : "\nAll contrast checks passed.");
 process.exit(fail ? 1 : 0);

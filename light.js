@@ -41,6 +41,28 @@ export function scale3(c, k) { return [c[0] * k, c[1] * k, c[2] * k]; }
    Not relLum() — that one is the WCAG definition and is for contrast only. */
 export function luma(c) { return c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114; }
 
+/* Hue angle in degrees, for laying the sleeve's colours across the strip.
+   Achromatic colours return 0 rather than NaN — a grey has no hue to sort by
+   and any stable answer will do. */
+function hueOf(c) {
+  var mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]), d = mx - mn;
+  if (d < 1e-6) return 0;
+  var h;
+  if (mx === c[0]) h = ((c[1] - c[2]) / d + 6) % 6;
+  else if (mx === c[1]) h = (c[2] - c[0]) / d + 2;
+  else h = (c[0] - c[1]) / d + 4;
+  return h * 60;
+}
+
+/* Real dispersion is ordered by wavelength. The strip cannot borrow a
+   spectrum's colours — those come from the record — but it can borrow its
+   ordering, so the palette is laid warm edge to cool edge. A sleeve that is
+   three shades of rust still orders sensibly and still reads as rust, which
+   is the correct answer for that record. */
+export function orderByHue(colors) {
+  return colors.slice().sort(function (a, b) { return hueOf(a) - hueOf(b); });
+}
+
 function ch255(v) { return Math.round(clamp01(v) * 255); }
 export function rgb255(c) {
   return "rgb(" + ch255(c[0]) + "," + ch255(c[1]) + "," + ch255(c[2]) + ")";
