@@ -186,9 +186,11 @@ Extend the import at the top of `scripts/check-contrast.mjs`:
 ```js
 import {
   tokensFor, contrast, relLum, washRoom, washGain, bandGrounds, orderByHue,
-  stripI, stripPeak, LIGHT, BAND_ALPHA, WASH, STRIP
+  stripI, stripPeak, LIGHT, BAND_ALPHA, WASH
 } from "../light.js";
 ```
+
+`STRIP` itself is deliberately **not** imported — the sweep tests the functions that read it (`stripPeak()`, `stripI()`), not the constants directly. Importing the block to assert its own values back at itself would be a test that asserts nothing.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -346,9 +348,11 @@ Then remove `washGain` from the import list, leaving:
 ```js
 import {
   tokensFor, contrast, relLum, washRoom, bandGrounds, orderByHue,
-  stripI, stripPeak, LIGHT, BAND_ALPHA, WASH, STRIP
+  stripI, stripPeak, LIGHT, BAND_ALPHA
 } from "../light.js";
 ```
+
+`WASH` goes too. The block that used `WASH.poolMin` is the one this task deletes; the new lean proofs call `washRoom()` rather than reaching into its constants, which is the right level for them to sit at.
 
 - [ ] **Step 2: Run test to verify it fails**
 
