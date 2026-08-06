@@ -9,3 +9,8 @@ scripts/node_modules/
 .claude/settings.local.json
 # subagent-driven-development workspace
 .superpowers/
+
+# local no-cache dev server. python -m http.server sends Last-Modified, so a
+# plain reload keeps the previous copy of an ES module and edits appear to do
+# nothing; serve.py sets no-store instead. Local tooling, not part of the site.
+serve.py
