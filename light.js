@@ -252,11 +252,21 @@ export var STRIP = {
      on an 800px-tall window, or ~15px per stop at five stops. It was 0.028,
      which gave each stop 9px and blurred them into one gradient.
 
-     Deliberately not wider. The apparent width comes from HALO_W below, which
-     reaches ~3.5x further — the core only has to be thick enough for the
-     colours to separate, and a thick core reads as a painted stripe rather
-     than as light. */
-  W: 0.048,
+     0.072 is about 115px of core on that same window, ~23px per stop. This was
+     0.048 and held there on the argument that the core only has to be thick
+     enough for the colours to separate, with HALO_W carrying the apparent
+     width — a thick core reads as a painted stripe rather than as light.
+
+     That risk is real and this is where to look if the strip ever starts
+     reading as paint. But at 0.048 the separation it was protecting was the
+     only thing the strip had, and the record deserves more room on the wall
+     than that. HALO_W is a multiple of W, so the bloom widens with it and the
+     ratio of core to halo is unchanged.
+
+     Costs nothing at the ceiling: stripPeak() is GAIN, the node terms, HALO_GAIN
+     and CH_MAX, none of which is W. A wider strip lights more wall at the same
+     peak, it does not light it harder. */
+  W: 0.072,
   /* Where the core's falloff starts, as a fraction of W. At 0.25 three
      quarters of the core is transition, which is what makes the edge soft
      rather than cut. It was 0.55. */
