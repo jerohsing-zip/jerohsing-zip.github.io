@@ -245,9 +245,31 @@ export function bandGrounds(band, room) {
 
    The colours are the sleeve's own, laid across the strip's width by
    orderByHue(). What reads as refraction is separation — light that arrived as
-   one thing landing as three, side by side — not a manufactured spectrum. */
+   one thing landing as five, side by side — not a manufactured spectrum. */
 export var STRIP = {
-  W: 0.028,          // half-width, aspect-corrected units
+  /* Half-width of the core, in uv units. The strip runs near-horizontal, so
+     this reads as a fraction of viewport height: 0.048 is about 77px of core
+     on an 800px-tall window, or ~15px per stop at five stops. It was 0.028,
+     which gave each stop 9px and blurred them into one gradient.
+
+     Deliberately not wider. The apparent width comes from HALO_W below, which
+     reaches ~3.5x further — the core only has to be thick enough for the
+     colours to separate, and a thick core reads as a painted stripe rather
+     than as light. */
+  W: 0.048,
+  /* Where the core's falloff starts, as a fraction of W. At 0.25 three
+     quarters of the core is transition, which is what makes the edge soft
+     rather than cut. It was 0.55. */
+  EDGE: 0.25,
+  /* The bloom: a second, much wider and much dimmer pass carrying the same
+     colours, with no caustic nodes. Light spilling past its own edge is what
+     separates something glowing from something painted, and it is what does
+     the widening — the core stays restrained and the halo carries the size.
+
+     HALO_W is a multiple of W; HALO_GAIN a fraction of GAIN. Both are set from
+     looking, not from reasoning. */
+  HALO_W: 3.5,
+  HALO_GAIN: 0.35,
   L: 0.30,           // half-length
   /* How far from the caster the strip lands — below the window, above the
      lamp. The throw was downward from both at first, which is right for a
@@ -268,6 +290,23 @@ export var STRIP = {
      footing is held. Past noon the geometry clears the plate on its own and
      this stops applying — max(), so nothing jumps when it does. */
   CLEAR: 0.52,
+  /* And never right of this, for the same reason in mirror. CLEAR bounds the
+     morning; nothing bounded the afternoon, and the cast angle keeps pushing
+     the strip right long after the window has stopped moving. The throw is
+     along nrm, whose x component grows with the angle, so the two compound:
+     at window x 0.96 the strip's centre lands at 1.187 and its left edge at
+     0.994 — the record's colour leaves the viewport entirely on a late western
+     sun, with nothing on screen to say a record is playing.
+
+     0.88 keeps roughly two thirds of the strip in frame at the extreme and
+     lets the rest run off the edge, which is what light does at a frame
+     boundary; pinning the whole strip inside would have frozen its sweep
+     across a much wider band of the afternoon. Engages from about window x
+     0.78, and min() like CLEAR's max(), so nothing jumps when it takes hold.
+
+     Daylight only. Once the lamp is the caster the throw flips sign and the
+     centre tops out at 0.733 on its own, so this never binds after dark. */
+  CLEAR_R: 0.88,
   /* How much the strip answers the pointer, against the room's own parallax.
      It is applied after CLEAR, not before — folded in earlier it went through
      the max() and the strip lost all sideways movement for the seven hours the
@@ -279,7 +318,13 @@ export var STRIP = {
      as the light shifting, while the same gain in y would just bob it. */
   PAR_X: 3.2,
   PAR_Y: 1.0,
-  GAIN: 0.22,        // additive strength at full intensity
+  /* Additive strength at full intensity. 0.22 until the halo arrived — the
+     bloom is additive on top of the core, so it enters the peak bound, and at
+     0.22 the worst case came to 0.78 against a ceiling of 0.65. The rule for
+     this is the one written into the original plan: lower GAIN, not the
+     ceiling. The ceiling is the claim; the gain is the tuning. The core dims
+     slightly and the halo more than repays it. */
+  GAIN: 0.18,
   LAMP_W: 0.55,      // the lamp's weight as a caster, against the sun's
   NODE_FLOOR: 0.72,  // caustic nodes: the strip is not evenly lit along its length
   NODE_VAR: 0.55,
@@ -328,11 +373,19 @@ export var STRIP = {
 };
 
 /* The worst the strip can add to one channel: a fully saturated sleeve colour
-   at a caustic node, at full intensity. check-contrast.mjs holds this to a
-   ceiling, which is what makes "the strip cannot break the room" a checked
-   claim rather than an asserted one. */
+   at a caustic node, with the halo at full strength underneath it, at full
+   intensity. check-contrast.mjs holds this to a ceiling, which is what makes
+   "the strip cannot break the room" a checked claim rather than an asserted
+   one.
+
+   The HALO_GAIN term is the whole reason this function is worth having. The
+   bloom is a second additive pass, so it raises the worst case, and a bound
+   that forgot it would keep passing while quietly ceasing to be true — the
+   exact way stripI() went on reporting a strip the shader was not drawing.
+   Mirrors the shader's (plateau*nodes + halo*HALO_GAIN) at its maximum, where
+   plateau, nodes-noise and halo are each 1. */
 export function stripPeak() {
-  return STRIP.GAIN * (STRIP.NODE_FLOOR + STRIP.NODE_VAR) * STRIP.CH_MAX;
+  return STRIP.GAIN * (STRIP.NODE_FLOOR + STRIP.NODE_VAR + STRIP.HALO_GAIN) * STRIP.CH_MAX;
 }
 
 /* The colour one stop of the strip throws, before intensity and gain. Mirrors

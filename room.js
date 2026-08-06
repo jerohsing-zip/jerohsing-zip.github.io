@@ -39,13 +39,24 @@ var FRAG = [
   "uniform vec3 uRoom;",             // ambient wall, cloud already in it
   "uniform vec3 uWarm; uniform float uWarmI;",   // tungsten lamp
   "uniform vec3 uWash; uniform vec3 uWash2; uniform vec3 uWash3;",   // the sleeve, hue-ordered across the strip
+  "uniform vec3 uWash4; uniform vec3 uWash5;",                       // …five stops, when the cover has five
   "uniform vec3 uLean; uniform float uWashI;",   // the sleeve's dominant colour, and whether a record is on
   "uniform float uCover;",           // how much of the room the page has scrolled over
   "uniform float uCloud, uWet, uFog, uHaze;",
   "uniform vec2 uWind;",
 
   "float luma(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }",
-  "float hash(vec2 p){ p=fract(p*vec2(123.34,345.45)); p+=dot(p,p+34.345); return fract(p.x*p.y); }",
+  /* The old hash was fract(p*vec2(123.34,345.45)) folded together. On the
+     integer lattice that noise() samples, p.x*123.34 has the same fractional
+     part as p.x*0.34 — and 0.34 is 17/50, so the x term cycled through fifty
+     values and the y term through twenty. Separable, low-period, axis-aligned:
+     exactly the recipe for rectangular cells with visible seams, which is what
+     the room grew across its walls whenever it rained. Turning the rain down
+     hid it; it did not stop being there.
+
+     This is Hoskins' hash-without-sine, which mixes all three components
+     against each other so no axis keeps its own period. */
+  "float hash(vec2 p){ vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }",
   "float noise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);",
   "  float a=hash(i),b=hash(i+vec2(1.0,0.0)),c=hash(i+vec2(0.0,1.0)),d=hash(i+vec2(1.0,1.0));",
   "  return mix(mix(a,b,f.x),mix(c,d,f.x),f.y); }",
@@ -86,7 +97,13 @@ var FRAG = [
      Damp the addition by how lit the room already is, so the pane still blows
      out but the room keeps its colour. */
   "  float add = 1.0 - clamp(luma(uRoom)*1.15, 0.0, 0.85);",
-  "  float thrown = pane*0.80 + spill*0.55;",
+  /* Kept apart until after the weather, because the two take rain differently.
+     Summed first, any modulation of `thrown` also modulates `spill` — and spill
+     is a broad exponential that still reads at 0.16 clear across the viewport,
+     so a sharp field applied there draws water down every wall in the room.
+     With the old smooth field that was invisible; with sparse bright runs it is
+     the whole picture. */
+  "  float tPane = pane*0.80, tSpill = spill*0.55;",
   /* ---- rain, in the room rather than on the glass.
      Streaks on the pane are a picture of rain. What makes a space read as wet
      is that its light stops being still, and that has to happen twice over.
@@ -96,24 +113,85 @@ var FRAG = [
      side of the room stayed dry while it poured. So the same field also scales
      the finished room: the only window in here is being rained on, and the
      whole light level goes with it. One noise, read at two reaches. */
-  "  float run = 0.0;",
+  "  float wetRun = 0.0, wetSoft = 0.0;",
   "  if (uWet > 0.002) {",
-  "    vec2 rq = vec2(dp.x*3.2, dp.y*1.15 - uTime*0.09) + uWind*t*2.0;",
-  "    run = (fbm(rq*2.4) - 0.5) * uWet;",
-  "    thrown *= 1.0 + run*1.10;",
+  /* Finer and far weaker than it was. At 2.4 the field's lowest octave was
+     about a sixth of the viewport across, so its cells read as rectangles on
+     the wall rather than as moving light; at 3.6 they are small enough to be
+     texture. The amplitudes were the real fault: 1.10 scaled the window's
+     throw by ±39% at moderate rain, which does not modulate the window so much
+     as tear it into lobes, and 0.22 put the noise field itself on every wall in
+     the room. Rain is supposed to stop the light being still, not become
+     something you can point at. */
+  /* Direction, speed and grain each say what phenomenon this is, and all three
+     used to say fog.
+
+     Direction: subtracting time from the sampled y holds a feature's value at
+     increasing dp.y, so the field climbed. Speed: 0.09/1.15 took thirteen
+     seconds to cross the room. Grain: the cells were elongated across the fall
+     rather than along it. Motion blur stretches a falling thing *down*, so
+     cells must run taller than wide — an earlier pass here made them wider on
+     the theory that water arrives in sheets, which produced horizontal layers
+     descending, and that is if anything a purer fog than what it replaced.
+
+     But direction, speed and grain together were still not enough, because the
+     material was wrong underneath them. fbm is the construction *for* cloud: a
+     sum of smooth octaves is continuous, soft-edged and low-contrast
+     everywhere, which is what a gas looks like. Liquid is the opposite — mostly
+     nothing, punctuated by sparse bright runs with definite edges.
+
+     So the field is thresholded rather than used raw. Measured over 300k
+     samples, smoothstep(0.55,0.72,fbm) has a median of exactly zero: more than
+     half the room carries no modulation at all, and the rest reaches 1.0. The
+     same fbm read raw stays the soft, unpointable field the room-wide term
+     always wanted. One noise, two reaches, as before — what changed is that the
+     two reaches now take different sharpness off it. */
+  "    vec2 rq = vec2(dp.x*12.0, dp.y*1.7 + uTime*0.44) + uWind*t*2.0;",
+  "    float n = fbm(rq*1.5);",
+  /* Both constants are the measured means of their own field, not guesses, so
+     each term modulates light around its unlit value instead of biasing the
+     whole room brighter whenever it rains. */
+  "    wetRun  = (smoothstep(0.55, 0.72, n) - 0.128) * uWet;",
+  "    wetSoft = (n - 0.486) * uWet;",
+  /* 0.29 is set from the measured tail: the sharp term runs -0.128..+0.872
+     about its mean, so this lands the pane between -3.7% and +25%. The
+     asymmetry is the point — a slightly dimmed baseline with bright runs
+     through it — and +25% stays clear of the ±39% that tore the window into
+     lobes.
+
+     Only the pane. Water is on the glass, so that is where it is allowed to be
+     legible; the spill is the same light after it has crossed the room, and it
+     takes the soft field instead. */
+  "    tPane  *= 1.0 + wetRun*0.29;",
+  "    tSpill *= 1.0 + wetSoft*0.12;",
   "  }",
-  "  col += lightCol * thrown * lightI * add;",
+  "  col += lightCol * (tPane + tSpill) * lightI * add;",
   // and the veil of scattered light the damp air itself is lit by
   "  col += lightCol * lightI * uHaze * 0.05;",
-  "  col *= 1.0 + run*0.22;",
+  /* The room keeps the soft field, not the sharp one. Sparse bright runs
+     crawling across the walls behind text is exactly the thing the paragraph
+     above refuses; here the rain is only allowed to stop the light being
+     still. ±2% at the extreme. */
+  "  col *= 1.0 + wetSoft*0.06;",
 
   // ---- weather, on the glass only
   "  if (pane > 0.002) {",
   "    float g = dot(col, vec3(0.333));",
   "    col = mix(col, mix(col, vec3(g), 0.55) + lightCol*0.05, uFog*pane*0.85);",
-  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(64.0, 7.0) + vec2(uWind.x*2.2, -1.0)*uTime*1.7;",
-  "    float streak = smoothstep(0.87, 1.0, fract(noise(rp)*1.7));",
-  "    col += lightCol * streak * uWet * pane * 0.30;",
+  /* +1.0, not -1.0. Adding time to the sampled y walks a feature down the glass;
+     subtracting it walked them up, which is not what DESIGN.md means by "the
+     falling streaks" and not what rain does. */
+  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(26.0, 5.0) + vec2(uWind.x*2.2, 1.0)*uTime*1.7;",
+  /* 64x7 asked value noise for cells nine times taller than wide, and a value
+     noise cell is a rectangle — so at that anisotropy the streaks *were* the
+     cells, drawn as hard vertical bars across the glass. Wider and fewer. */
+  /* smoothstep on the noise itself, not on fract() of it. Taking fract of a
+     scaled noise wraps at 1.0, and that wrap is a discontinuity — it drew a
+     hard edge wherever the field crossed the boundary, which is what put
+     scratches across the glass instead of water on it. A soft band gives a
+     streak that still has a shape but no cut. */
+  "    float streak = smoothstep(0.60, 0.96, noise(rp));",
+  "    col += lightCol * streak * uWet * pane * 0.10;",
   "  }",
 
   // ---- the desk lamp, low and warm, strongest after dark.
@@ -175,9 +253,11 @@ var FRAG = [
      same toLamp that chose the source chooses the side, so the strip crosses
      the wall as the room hands over at dusk rather than jumping. */
   "    vec2 sc0 = src + nrm * mix(" + f(-STRIP.THROW) + ", " + f(STRIP.THROW) + ", toLamp);",
-  /* …held clear of the plate. A morning window is behind the plate and so is
-     what it casts; see STRIP.CLEAR for what this costs and why it is paid. */
-  "    sc0.x = max(sc0.x, " + f(STRIP.CLEAR) + ");",
+  /* …held clear of the plate, and clear of the right edge. A morning window is
+     behind the plate and so is what it casts; a late western one throws the
+     strip off the viewport entirely. See STRIP.CLEAR and STRIP.CLEAR_R for what
+     each costs and why it is paid. */
+  "    sc0.x = clamp(sc0.x, " + f(STRIP.CLEAR) + ", " + f(STRIP.CLEAR_R) + ");",
   /* The pointer moves it last, so the clamp above cannot flatten the sideways
      component — and so the lamp gets parallax too, which it did not when this
      rode on uWin and toLamp faded it to nothing after dark. */
@@ -187,16 +267,30 @@ var FRAG = [
   /* A flat-topped plateau, not a gaussian: a gaussian peaks at the centre,
      which would leave the two edge colours dim and defeat the separation the
      whole strip exists to show. */
-  "    float plateau = 1.0 - smoothstep(" + f(STRIP.W * 0.55) + ", " + f(STRIP.W) + ", abs(across));",
+  "    float plateau = 1.0 - smoothstep(" + f(STRIP.W * STRIP.EDGE) + ", " + f(STRIP.W) + ", abs(across));",
   "    float taper = 1.0 - smoothstep(" + f(STRIP.L * 0.45) + ", " + f(STRIP.L) + ", abs(along));",
+  /* The bloom. Much wider, much dimmer, no nodes — light spilling past its own
+     edge, which is the difference between something glowing and something
+     painted. It is also what makes the strip read as wide: the core stays thin
+     enough for five colours to separate, and the halo carries the size. */
+  "    float halo = 1.0 - smoothstep(0.0, " + f(STRIP.W * STRIP.HALO_W) + ", abs(across));",
   /* Caustic nodes — a real strip is not evenly lit along its length. Static:
      the noise is read at a fixed position, never advanced. */
   "    float nodes = " + f(STRIP.NODE_FLOOR) + " + " + f(STRIP.NODE_VAR) + "*noise(vec2(along*" + f(STRIP.NODE_FREQ) + ", 3.7));",
   /* The spectral axis is the strip's width, not its length. Blends between
      the stops are mixes of two cover colours, so nothing outside the sleeve's
      own palette is ever drawn. */
+  /* Five stops across four segments, as a chain of mixes rather than nested
+     ternaries: each clamp is zero until its segment begins and one after it
+     ends, so every mix takes over exactly where the last finished. Branchless,
+     and it degrades on its own — setWash repeats the last colour it was given,
+     so a cover with three stops simply has its final segments collapse. */
   "    float s = clamp(across/" + f(STRIP.W) + "*0.5 + 0.5, 0.0, 1.0);",
-  "    vec3 sc = s < 0.5 ? mix(uWash, uWash2, s*2.0) : mix(uWash2, uWash3, (s-0.5)*2.0);",
+  "    float u = s * 4.0;",
+  "    vec3 sc = mix(uWash, uWash2, clamp(u, 0.0, 1.0));",
+  "    sc = mix(sc, uWash3, clamp(u - 1.0, 0.0, 1.0));",
+  "    sc = mix(sc, uWash4, clamp(u - 2.0, 0.0, 1.0));",
+  "    sc = mix(sc, uWash5, clamp(u - 3.0, 0.0, 1.0));",
   /* Divided by its own luminance raised to NORM, so a dark record throws a
      dark strip. At NORM = 1 this was full normalisation and every sleeve threw
      the same amount of light — a dark near-neutral cover arrived on the wall
@@ -221,7 +315,11 @@ var FRAG = [
   "    float tgtL = pow(max(luma(sc), 0.0001), " + f(1 - STRIP.NORM) + ");",
   "    sc -= min(min(sc.r, sc.g), sc.b) * " + f(STRIP.PURITY) + ";",
   "    sc = min(sc / max(luma(sc), 0.0001) * tgtL, vec3(" + f(STRIP.CH_MAX) + "));",
-  "    col += sc * plateau * taper * nodes * stripI * " + f(STRIP.GAIN) + ";",
+  /* Core and halo in one add, so the bracket is exactly what stripPeak() bounds
+     — (plateau*nodes + halo*HALO_GAIN), each term at most 1 except nodes. Split
+     into two statements the bound would still hold, but nothing would make it
+     obvious that it has to cover both. */
+  "    col += sc * (plateau*nodes + halo*" + f(STRIP.HALO_GAIN) + ") * taper * stripI * " + f(STRIP.GAIN) + ";",
   "  }",
 
   /* ---- rain again, last: wet air takes the warmth back out of whatever the
@@ -269,7 +367,8 @@ export function createRoom(host) {
     res: u("uRes"), time: u("uTime"), mouse: u("uMouse"),
     win: u("uWin"), winI: u("uWinI"), light: u("uLight"), room: u("uRoom"),
     warm: u("uWarm"), warmI: u("uWarmI"), wash: u("uWash"), washI: u("uWashI"),
-    wash2: u("uWash2"), wash3: u("uWash3"), lean: u("uLean"), cover: u("uCover"),
+    wash2: u("uWash2"), wash3: u("uWash3"), wash4: u("uWash4"), wash5: u("uWash5"),
+    lean: u("uLean"), cover: u("uCover"),
     cloud: u("uCloud"), wet: u("uWet"), fog: u("uFog"), haze: u("uHaze"), wind: u("uWind")
   };
 
@@ -295,7 +394,7 @@ export function createRoom(host) {
   var cur = {
     win: [0.5, 0.6], winI: 0, light: [0, 0, 0], room: [0, 0, 0],
     warm: [0, 0, 0], warmI: 0, wash: [0, 0, 0], wash2: [0, 0, 0], wash3: [0, 0, 0],
-    lean: [0, 0, 0], washI: 0, cover: 0,
+    wash4: [0, 0, 0], wash5: [0, 0, 0], lean: [0, 0, 0], washI: 0, cover: 0,
     cloud: 0, wet: 0, fog: 0, haze: 0, wind: [0, 0]
   };
   var tgt = JSON.parse(JSON.stringify(cur));
@@ -323,9 +422,16 @@ export function createRoom(host) {
     if (!colors || !colors.length) { tgt.washI = 0; return; }
     var o = orderByHue(colors);
     tgt.lean = colors[0].slice();
-    tgt.wash = o[0].slice();
-    tgt.wash2 = (o[1] || o[0]).slice();
-    tgt.wash3 = (o[2] || o[1] || o[0]).slice();
+    /* Each stop falls back to the one before it, so a cover that yielded three
+       colours collapses its last two segments instead of mixing toward black.
+       signals.js under-fills on purpose when a sleeve lacks the variety for
+       five, and this is the end of that contract. */
+    var at = function (i) { return o[Math.min(i, o.length - 1)].slice(); };
+    tgt.wash = at(0);
+    tgt.wash2 = at(1);
+    tgt.wash3 = at(2);
+    tgt.wash4 = at(3);
+    tgt.wash5 = at(4);
     tgt.washI = typeof amount === "number" ? amount : 1;
   }
 
@@ -352,7 +458,8 @@ export function createRoom(host) {
     ease3(cur.light, tgt.light, 0.035); ease3(cur.room, tgt.room, 0.035);
     ease3(cur.warm, tgt.warm, 0.035);
     ease3(cur.wash, tgt.wash, 0.03); ease3(cur.wash2, tgt.wash2, 0.03);
-    ease3(cur.wash3, tgt.wash3, 0.03); ease3(cur.lean, tgt.lean, 0.03);
+    ease3(cur.wash3, tgt.wash3, 0.03); ease3(cur.wash4, tgt.wash4, 0.03);
+    ease3(cur.wash5, tgt.wash5, 0.03); ease3(cur.lean, tgt.lean, 0.03);
     cur.winI = ease(cur.winI, tgt.winI, 0.035);
     cur.warmI = ease(cur.warmI, tgt.warmI, 0.035);
     cur.washI = ease(cur.washI, tgt.washI, 0.035);     // the record fades in and out slowly
@@ -378,6 +485,8 @@ export function createRoom(host) {
     gl.uniform3fv(U.wash2, cur.wash2);
     gl.uniform1f(U.washI, cur.washI);
     gl.uniform3fv(U.wash3, cur.wash3);
+    gl.uniform3fv(U.wash4, cur.wash4);
+    gl.uniform3fv(U.wash5, cur.wash5);
     gl.uniform3fv(U.lean, cur.lean);
     gl.uniform1f(U.cover, cur.cover);
     gl.uniform1f(U.cloud, cur.cloud);

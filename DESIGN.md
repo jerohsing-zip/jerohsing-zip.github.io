@@ -89,10 +89,26 @@ Verify both families resolve from Google Fonts before shipping.
   **It does not move.** That is the design, not an economy. A bright band on a wall is furniture; a moving
   field is weather, and the eye cannot stop reading weather. Its colours are only ever the sleeve's own, laid
   warm edge to cool edge — what reads as refraction is *separation*, light that arrived as one thing landing
-  as three side by side, never a manufactured spectrum. A cover that is three shades of rust still reads as
-  rust, which is the correct answer for that record. Every sleeve reaches the wall, including the monochrome
+  as up to five side by side, never a manufactured spectrum. A cover that is three shades of rust still reads
+  as rust, which is the correct answer for that record. Every sleeve reaches the wall, including the monochrome
   ones — a white record throws white light, and that is a true rendering of it rather than a failure to find
   a colour.
+
+  **Up to five, and often fewer.** The count is not fixed, because padding it would be a lie about the record:
+  a sleeve returns a fifth colour only if it has one that stands clear of the four already chosen, and the
+  second detail must differ in *hue* from the first so a single strong colour cannot come back as a light and
+  a dark version of itself and be called two. Measured across real covers the answer ranges from three to
+  five — Rumours has three and gets three. The strip draws what it is given; the alternative is five shades of
+  one colour, which reads as a gradient and says less than three honest ones.
+
+  **The core carries the colour; the bloom carries the size.** The band is drawn twice: a narrow core with a
+  soft falloff, thick enough for the stops to separate but no thicker, and over it a much wider and much
+  dimmer halo carrying the same colours with no caustic nodes. Light spilling past its own edge is the
+  difference between something glowing and something painted, and it means the apparent width costs nothing
+  in colour legibility — widening the core instead would have blurred the stops into one gradient and read as
+  a painted stripe. The halo is additive on top of the core, so it enters the peak bound that
+  `check-contrast.mjs` holds; adding it pushed the worst case over the ceiling, and the gain came down rather
+  than the ceiling going up.
 
   **A dark record throws a dark strip, and keeps its hue.** Both had to be built; neither was free. The strip
   first divided the sleeve colour by its own luminance, which made every record throw exactly the same amount

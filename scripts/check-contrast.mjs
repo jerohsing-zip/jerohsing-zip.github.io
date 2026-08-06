@@ -320,6 +320,19 @@ console.log(`strip peak addition ${peak.toFixed(3)} (ceiling ${STRIP_CEILING})`)
 if (peak > STRIP_CEILING) bad(`strip peak addition ${peak.toFixed(3)} exceeds ${STRIP_CEILING}`);
 if (!(peak > 0)) bad("strip peak addition is not positive — the strip would never be visible");
 
+/* The bloom is a second additive pass, so the bound has to cover the core and
+   the halo together. A stripPeak() that forgot the halo would keep passing and
+   quietly stop being true — the same failure as stripI() reporting a strip the
+   shader was not drawing, which no sweep of the model could see. Checked as an
+   inequality against the core-only figure rather than by restating the
+   formula, so this catches the omission without becoming a second copy of the
+   arithmetic it is guarding. */
+const coreOnly = STRIP.GAIN * (STRIP.NODE_FLOOR + STRIP.NODE_VAR) * STRIP.CH_MAX;
+if (!(peak > coreOnly)) {
+  bad(`stripPeak ${peak.toFixed(3)} does not exceed the core-only worst case ${coreOnly.toFixed(3)} — the halo is missing from the bound`);
+}
+console.log(`  of which halo: ${(peak - coreOnly).toFixed(3)}`);
+
 /* The strip is an event, not a constant: it needs a source, direct light, and
    an uncovered room. Each of those must actually be able to switch it off. */
 if (stripI(60, 0, 1) > 1e-6) bad("a fully covered room still draws the strip");
