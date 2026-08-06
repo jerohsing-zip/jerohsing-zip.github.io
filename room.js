@@ -5,11 +5,15 @@
      · the window — position from true solar azimuth, intensity and
        colour from true solar altitude. Weather lands on its glass.
      · the tungsten desk lamp — rises as the sun goes down.
-     · the turntable wash — colour thrown by the record now playing.
+     · the prism — a still strip of split light, cast by whichever of
+       the other two is lighting the room, carrying the colours of the
+       record now playing. Plus a weak motionless lean in the walls,
+       which is what the record is while the strip is absent.
 
    Nothing here is drawn as an object. The window is light with a
    soft rectangular falloff, not a picture of a window; drawing the
-   frame would be the pastiche this world refuses.
+   frame would be the pastiche this world refuses. The prism is never
+   depicted either — only what it does to the light that reaches it.
 
    Returns null when WebGL is unavailable so the caller can fall
    back to the CSS gradient.

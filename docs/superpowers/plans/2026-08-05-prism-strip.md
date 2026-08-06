@@ -47,7 +47,7 @@ Task 4 leaves the render in a shippable state on its own: no haze, no strip. Tha
 **Interfaces:**
 - Produces: `orderByHue(colors: number[][]) -> number[][]` — returns a new array of the same colour triples, sorted warm edge to cool edge. Does not mutate its argument.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `scripts/check-contrast.mjs`, just above the final `console.log(fail ? ...)` line:
 
@@ -89,12 +89,12 @@ import {
 } from "../light.js";
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node scripts/check-contrast.mjs`
 Expected: crashes with `SyntaxError: The requested module '../light.js' does not provide an export named 'orderByHue'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `light.js`, immediately after the `luma()` export (line 42):
 
@@ -122,12 +122,12 @@ export function orderByHue(colors) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node scripts/check-contrast.mjs`
 Expected: PASS — `orderByHue: permutation and warm-first hold`, then `All contrast checks passed.`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add light.js scripts/check-contrast.mjs
@@ -149,7 +149,7 @@ git commit -m "feat: order a sleeve's palette by hue for the strip"
   - `stripPeak() -> number` — worst-case additive contribution of the strip to one channel
   - `stripI(alt, cloud, cover) -> number` — the strip's intensity **excluding** the record's own `washI`, in 0..1
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `scripts/check-contrast.mjs`, above the final `console.log`:
 
@@ -192,12 +192,12 @@ import {
 
 `STRIP` itself is deliberately **not** imported — the sweep tests the functions that read it (`stripPeak()`, `stripI()`), not the constants directly. Importing the block to assert its own values back at itself would be a test that asserts nothing.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node scripts/check-contrast.mjs`
 Expected: `SyntaxError: ... does not provide an export named 'stripI'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `light.js` after the `WASH` block:
 
@@ -251,14 +251,14 @@ export function stripI(alt, cloud, cover) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node scripts/check-contrast.mjs`
-Expected: PASS. `strip peak addition 0.617 (ceiling 0.65)` and a strip-intensity line.
+Expected: PASS. `strip peak addition 0.615 (ceiling 0.65)` and a strip-intensity line.
 
 If the peak exceeds the ceiling, **lower `STRIP.GAIN`, not the ceiling.** The ceiling is the claim; the gain is the tuning.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add light.js scripts/check-contrast.mjs
@@ -281,7 +281,7 @@ This is the task that deletes machinery. `washGain()` is imported by both `app.j
 - Produces: `WASH = { temper: 0.72, lean: 0.12 }` — `poolMin`, `tint`, `add`, `dayGain`, `tintMax` deleted.
 - Removes: `washGain()` entirely.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `scripts/check-contrast.mjs`, **delete lines 91–154** — everything from the `/* ---- the album wash must not be able to break the room ---- */` comment through the `if (worstLift < MARGIN) bad(...)` line. Those prove properties of the daylight-gain mechanism this task removes.
 
@@ -354,12 +354,12 @@ import {
 
 `WASH` goes too. The block that used `WASH.poolMin` is the one this task deletes; the new lean proofs call `washRoom()` rather than reaching into its constants, which is the right level for them to sit at.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node scripts/check-contrast.mjs`
 Expected: FAIL. `washRoom` still takes five parameters, so calling it with three leaves `pool` and `gain` undefined and the arithmetic produces `NaN` — the range check reports `leaned room out of range`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `light.js`, replace the `WASH` block (lines 157-172), `washGain()` (lines 174-183) and `washRoom()` (lines 185-198) with:
 
@@ -417,7 +417,7 @@ and delete the `washGain` line from the `setLight` call, so `app.js:82-89` reads
       }, !lightInit);
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node scripts/check-contrast.mjs`
 Expected: PASS, including a `lean reach: worst ...` line above the floor.
@@ -427,7 +427,7 @@ Then confirm nothing still references the deleted names:
 Run: `grep -rn "washGain\|poolMin\|dayGain\|tintMax\|WASH.tint\|WASH.add" --include=*.js --include=*.mjs . | grep -v node_modules | grep -v .claude/worktrees`
 Expected: no output. `room.js` still references `WASH.tint` etc. at this point — **that is expected and Task 4 fixes it**; note the hits and move on. Any hit outside `room.js` is a miss to fix now.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add light.js app.js scripts/check-contrast.mjs
@@ -451,7 +451,7 @@ At the end of this task the render has no haze and no strip. That is deliberatel
 - Consumes: `WASH`, `orderByHue` from `light.js`
 - Produces: `setWash(colors, amount)` — **behaviour changed.** Now accepts up to three colours; derives `uLean` from `colors[0]` (score order, the dominant colour) and `uWash`/`uWash2`/`uWash3` from `orderByHue(colors)`. Still accepts `null` to fade the record out.
 
-- [ ] **Step 1: Update the import**
+- [x] **Step 1: Update the import**
 
 `room.js:17`:
 
@@ -461,7 +461,7 @@ import { WASH, STRIP, orderByHue } from "./light.js";
 
 (`STRIP` is unused until Task 5. Import it now so Task 5 touches only the shader string.)
 
-- [ ] **Step 2: Replace the uniform declarations**
+- [x] **Step 2: Replace the uniform declarations**
 
 `room.js:37-38`, replace:
 
@@ -478,7 +478,7 @@ with:
   "uniform float uCover;",           // how much of the room the page has scrolled over
 ```
 
-- [ ] **Step 3: Replace the wash block in FRAG with the lean**
+- [x] **Step 3: Replace the wash block in FRAG with the lean**
 
 `room.js:125-151`, replace the whole block from `// ---- the record's colour, drifting on the wind` through the `col += washCol * pool * ...` line with:
 
@@ -491,18 +491,18 @@ with:
 
      Flat and motionless on purpose. This is the record's standing presence,
      felt rather than seen; the strip below is what it actually looks like. */
-  "  float ll = max(luma(uLean), 0.05);",
+  "  float ll = max(luma(uLean), 0.0001);",
   "  vec3 lw = clamp(mix(vec3(1.0), uLean/ll, " + f(WASH.temper) + "), vec3(0.38), vec3(1.75));",
   "  col = mix(col, col*lw, uWashI * " + f(WASH.lean) + ");",
 ```
 
 Note the `par` and `q`/`warp`/`field` locals defined in the deleted block are not used anywhere below it — verify with a search for `warp` and `field` in `FRAG` before deleting, and keep `par` (it is defined at line 52 and used by the window).
 
-- [ ] **Step 4: Add the uniform locations**
+- [x] **Step 4: Add the uniform locations**
 
 `room.js:194-200`, in the `U` map: remove `washGain: u("uWashGain")`, add `wash3: u("uWash3")`, `lean: u("uLean")`, `cover: u("uCover")`.
 
-- [ ] **Step 5: Update the eased state**
+- [x] **Step 5: Update the eased state**
 
 In `cur` (lines 221-225): remove `washGain: 1`, add `wash3: [0, 0, 0]`, `lean: [0, 0, 0]`, `cover: 0`.
 
@@ -534,7 +534,7 @@ Replace `setWash()` (lines 243-249) with:
 
 Add `setCover: setCover` to the returned object (line 306).
 
-- [ ] **Step 6: Update the frame loop**
+- [x] **Step 6: Update the frame loop**
 
 In `frame()`: add `ease3(cur.wash3, tgt.wash3, 0.03);` and `ease3(cur.lean, tgt.lean, 0.03);` alongside the existing wash easing. Remove the `cur.washGain` easing line.
 
@@ -552,7 +552,7 @@ In the uniform writes: remove `gl.uniform1f(U.washGain, cur.washGain);`, add:
     gl.uniform1f(U.cover, cur.cover);
 ```
 
-- [ ] **Step 7: Verify the shader compiles and the haze is gone**
+- [x] **Step 7: Verify the shader compiles and the haze is gone**
 
 There is no automated test for GLSL. Serve and look:
 
@@ -564,7 +564,7 @@ Open `http://localhost:8000`, then check the console. Expected: **no** `room sha
 
 Expected visually: the room is lit by window and lamp, with a faint even colour cast from the record. **No drifting blobs anywhere.** Compare against the screenshot that started this work.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add room.js
@@ -582,7 +582,7 @@ git commit -m "feat: the record leans on the walls instead of weathering them"
 **Interfaces:**
 - Consumes: `STRIP` from `light.js` (imported in Task 4), `setCover()` from `room.js` (added in Task 4), the `lp` lamp-position local already defined at `room.js:120`.
 
-- [ ] **Step 1: Add the strip to FRAG**
+- [x] **Step 1: Add the strip to FRAG**
 
 In `room.js`, immediately after the lean block from Task 4 — and it **must** come after `lp` is defined at line 120, since the strip reuses it as the lamp anchor:
 
@@ -628,13 +628,18 @@ In `room.js`, immediately after the lean block from Task 4 — and it **must** c
   "    vec3 sc = s < 0.5 ? mix(uWash, uWash2, s*2.0) : mix(uWash2, uWash3, (s-0.5)*2.0);",
   /* Unit luminance so a dark sleeve colour still throws light, then a per-
      channel ceiling because unit luminance is not unit channels — a saturated
-     red normalised this way reaches 3.34 in red and would blow the wall out. */
-  "    sc = min(sc / max(luma(sc), 0.05), vec3(" + f(STRIP.CH_MAX) + "));",
+     red normalised this way reaches 3.34 in red and would blow the wall out.
+
+     The divisor guards against zero and nothing else. It clamped at 0.05 in an
+     earlier draft, which made dark sleeves dim the room instead of colouring
+     it; light.js records the full diagnosis. CH_MAX is what bounds the result,
+     so the divisor does not need to. */
+  "    sc = min(sc / max(luma(sc), 0.0001), vec3(" + f(STRIP.CH_MAX) + "));",
   "    col += sc * plateau * taper * nodes * stripI * " + f(STRIP.GAIN) + ";",
   "  }",
 ```
 
-- [ ] **Step 2: Wire scroll to the cover uniform**
+- [x] **Step 2: Wire scroll to the cover uniform**
 
 In `app.js`, after the room is created. The first `.band` is where the page starts covering the room, so its offset is the denominator:
 
@@ -655,7 +660,7 @@ In `app.js`, after the room is created. The first `.band` is where the page star
 
 Call `room.setCover(coverNow())` once at the point where `room` is first assigned, so a page loaded mid-scroll (a refresh, or a `#segments` deep link) starts correct rather than fading in.
 
-- [ ] **Step 3: Verify visually**
+- [x] **Step 3: Verify visually**
 
 Run: `python -m http.server 8000`, open `http://localhost:8000`.
 
@@ -668,7 +673,7 @@ Then confirm, in order:
 3. Scrolling down fades it out before the first band reaches it.
 4. Its three colours are recognisably from the album art currently in the plate.
 
-- [ ] **Step 4: Tune against the live render**
+- [x] **Step 4: Tune against the live render**
 
 `GAIN`, `W` and `THROW` are the three constants set from reasoning rather than from looking. Adjust them in `light.js` — never in the shader — and reload.
 
@@ -679,7 +684,28 @@ Then confirm, in order:
 
 After any `GAIN` or `CH_MAX` change, re-run `node scripts/check-contrast.mjs` — the peak bound from Task 2 is what stops tuning from blowing the wall out.
 
-- [ ] **Step 5: Commit**
+**What this step actually found.** Three things, two of them structural rather than tuning:
+
+1. **The throw direction was wrong for the lamp.** `sc0 = src - nrm * THROW` throws downward from both casters,
+   because `-nrm.y = -cos(ang)` is negative for every angle in range. That is right for a window high on the
+   wall and wrong for a lamp at `y = 0.17`: it put the night strip below the floor and off the bottom of the
+   viewport. **`stripI()` reported the lamp casting happily the whole time** — it models intensity, not
+   geometry — so the sweep proved a strip the shader was not drawing, which is exactly the failure mode
+   `room.js:23` warns about, in a form no sweep of `light.js` could ever catch. The throw now follows
+   `toLamp`: down from the window, up from the lamp.
+2. **`THROW` 0.26 → 0.42.** At 0.26 the midday strip landed inside the pane's own blowout and its three
+   colours washed to white — the separation the strip exists to show was invisible at the brightest hour of
+   the day. GAIN, W, NODE_* and CH_MAX all held at their planned values.
+3. **The morning gap, and `STRIP.CLEAR`.** From roughly 05:00 to 11:00 the window sits at `uv.x` 0.21–0.32 —
+   behind the ident plate — and so does everything it casts, leaving the record with nothing but the lean for
+   seven hours of every day. Resolved by holding the strip's horizontal footing clear of the plate. This was
+   escalated rather than decided here: it is the one place in the room where light is *placed* instead of
+   thrown, and `STRIP.CLEAR` and `DESIGN.md` both say so.
+
+The plan's self-review predicted #2 ("`THROW`, `W` and `GAIN` are guesses") and predicted the *class* of
+failure in #1 without predicting the instance. Both were found by looking, as it said they would have to be.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add room.js app.js light.js
@@ -696,21 +722,21 @@ git commit -m "feat: the record's colour arrives as a strip of split light"
 - Modify: `DESIGN.md` — the wash section
 - Modify: `room.js:1-16` — the header comment lists the three lights
 
-- [ ] **Step 1: Read the current wash section**
+- [x] **Step 1: Read the current wash section**
 
 Run: `grep -n "wash\|turntable\|sleeve" DESIGN.md`
 
-- [ ] **Step 2: Rewrite it**
+- [x] **Step 2: Rewrite it**
 
 Cover, in the file's existing voice: that the record's colour arrives as a strip of split light rather than as weather; that the strip is cast by the window or the lamp and sweeps with the sun; that it is still, and why stillness is the point; that its colours are only ever the sleeve's; that cloud kills it because a caustic needs direct light; that it fades under the bands; and that the lean is what remains when it is absent.
 
 Say explicitly that the daylight-gain apparatus was removed and why — it solved a real problem for a mechanism that no longer exists. The file's habit is to record what was tried and rejected, and that history is worth keeping.
 
-- [ ] **Step 3: Update the shader header**
+- [x] **Step 3: Update the shader header**
 
 `room.js:4-8` says the room is lit by three real things and describes the third as "the turntable wash — colour thrown by the record now playing." Update it to name the prism, and keep the "nothing here is drawn as an object" paragraph — it now applies to the prism too, which is never depicted, only its light.
 
-- [ ] **Step 4: Full verification**
+- [x] **Step 4: Full verification**
 
 ```bash
 node scripts/check-contrast.mjs && node scripts/check-solar.mjs
@@ -724,7 +750,7 @@ grep -rn "washGain\|poolMin\|dayGain\|tintMax" --include=*.js --include=*.mjs --
 
 Expected: no output outside the spec and plan documents.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add DESIGN.md room.js

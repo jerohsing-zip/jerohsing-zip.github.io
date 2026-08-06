@@ -78,9 +78,40 @@ Verify both families resolve from Google Fonts before shipping.
   it, so the window loses its edge and carries further. Wind speed and direction set the drift. Every field of
   the same Open-Meteo call is spent — temperature, code, cloud, wind, humidity and precipitation all render
   something, and nothing is requested that does not.
-- **The turntable wash** — the album art of the current track, quantized to 2–3 dominant colors and thrown
-  across the room as bounded colored light. Low-chroma covers are rejected so a dull sleeve never washes the
-  room out. Decays back to true room light when playback stops.
+- **The prism** — the record's colour, arriving as a narrow strip of split light rather than as weather in the
+  air. Something with a bevelled edge is sitting in the room's light; the record is what that light breaks
+  into. It is cast by whichever source is actually lighting the room — the window by day, the desk lamp after
+  dark — so the handover happens on its own through dusk with nothing scheduling it, and it sweeps as the sun
+  crosses, a second clock. Cloud kills it outright, because a caustic needs direct light and an overcast
+  midday has none to give. It fades out as the page scrolls over the room, rather than ghosting through a
+  translucent band and being cut by its edge.
+
+  **It does not move.** That is the design, not an economy. A bright band on a wall is furniture; a moving
+  field is weather, and the eye cannot stop reading weather. Its colours are only ever the sleeve's own, laid
+  warm edge to cool edge — what reads as refraction is *separation*, light that arrived as one thing landing
+  as three side by side, never a manufactured spectrum. A cover that is three shades of rust still reads as
+  rust, which is the correct answer for that record. Low-chroma covers are rejected upstream, so a dull sleeve
+  never reaches the wall.
+
+  What remains when the strip is absent — overcast, or scrolled past — is **the lean**: a flat, motionless
+  tilt of the walls toward the sleeve's dominant hue, weak enough to be felt rather than seen. The sleeve is
+  normalised to unit luminance first, so the room shifts colour while holding its light; multiplying by a raw
+  cover colour just darkens, and a navy sleeve turned the room muddy instead of blue. Both decay back to true
+  room light when playback stops.
+
+  *What was here before, and why it went.* The wash was a volumetric fbm field drifting on the wind, with a
+  daylight-gain stage bolted on because a tint calibrated to read after dark was invisible at noon. The gain
+  solved a real problem, and it went with the mechanism that had it: there is no volumetric tint left to
+  defend against the sun. The field itself was the deeper mistake — viewport-scale colour moving behind text
+  is impossible to stop reading, and behind an 84%-opaque band it read as glass. The proofs that guarded the
+  gain were deleted with it, and replaced by proofs of the outcome it existed for: that the record is never
+  entirely absent from the room, and that neither lean nor strip can drive the room out of range.
+
+  *One honest departure.* Everything else in this room is a consequence of where the light is. Between about
+  05:00 and 11:00 the window sits behind the ident plate, and so did everything it cast — the record had
+  nothing but the lean for seven hours of every day. So the strip's horizontal footing is held clear of the
+  plate for those hours. It keeps its angle, its length and its rise; only its footing is placed rather than
+  thrown, and it stops applying the moment the geometry clears the plate on its own.
 - **The on-air lamp** — lit only while data is genuinely live. Replaces the previous world's abstract `●` pulse
   with something that means something.
 - **The ident** — a persistent opaque plate carrying name, what he does, where he is transmitting from, and how
@@ -124,13 +155,13 @@ complete page; it is never presented as a real value.
 ## Accessibility
 
 - Body ≥4.5:1 and large text ≥3:1, verified against **every** state the room can reach: all six solar regimes
-  at every cloud cover, plus a saturated album wash, in both light and dark scene states. The opaque `--paper`
+  at every cloud cover, plus a saturated album lean, in both light and dark scene states. The opaque `--paper`
   credential surfaces make this structurally achievable rather than a per-state negotiation.
 - The content bands are **translucent**, so the room stays visible the whole way down the page rather than
   being lidded over below the fold. Text is therefore derived and checked against the *composite* — band over
   the brightest and darkest room the shader can put behind it — not against the band's own colour. The
   translucency costs contrast, and it is spent from a budget `scripts/check-contrast.mjs` measures.
 - Focus visible. `aria-live="polite"` on updating values. Album art carries `alt`.
-- The window, glass weather, and color wash are `aria-hidden` decoration.
+- The window, glass weather, the prism strip and the lean are `aria-hidden` decoration.
 - Reduced-motion keeps correct color and disables animation.
 - Semantic landmarks and heading order preserved; the page works without JS and without WebGL.
