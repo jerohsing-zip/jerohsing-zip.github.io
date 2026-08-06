@@ -171,6 +171,9 @@ var FRAG = [
      same toLamp that chose the source chooses the side, so the strip crosses
      the wall as the room hands over at dusk rather than jumping. */
   "    vec2 sc0 = src + nrm * mix(" + f(-STRIP.THROW) + ", " + f(STRIP.THROW) + ", toLamp);",
+  /* …held clear of the plate. A morning window is behind the plate and so is
+     what it casts; see STRIP.CLEAR for what this costs and why it is paid. */
+  "    sc0.x = max(sc0.x, " + f(STRIP.CLEAR) + ");",
   "    vec2 sp = vec2((uv.x-sc0.x)*asp, uv.y-sc0.y);",
   "    float across = dot(sp, nrm), along = dot(sp, dir);",
   /* A flat-topped plateau, not a gaussian: a gaussian peaks at the centre,

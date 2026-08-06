@@ -251,6 +251,16 @@ export var STRIP = {
      nothing. Light thrown from below lands above. */
   THROW: 0.42,
   ANG: 0.62,         // radians of sweep either side of centre
+  /* The strip's centre never slides left of this. Between about 05:00 and
+     11:00 the window sits at uv.x 0.21–0.32 — behind the plate — and so does
+     everything it casts, which left the record with nothing but the lean for
+     seven hours of every day. So the cast is biased: placed, for those hours,
+     rather than purely thrown. That is a real cost and worth naming, because
+     everything else in this room is a consequence of where the light is. The
+     strip keeps its angle, its length and its rise; only its horizontal
+     footing is held. Past noon the geometry clears the plate on its own and
+     this stops applying — max(), so nothing jumps when it does. */
+  CLEAR: 0.52,
   GAIN: 0.22,        // additive strength at full intensity
   LAMP_W: 0.55,      // the lamp's weight as a caster, against the sun's
   NODE_FLOOR: 0.72,  // caustic nodes: the strip is not evenly lit along its length
