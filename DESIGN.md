@@ -90,8 +90,9 @@ Verify both families resolve from Google Fonts before shipping.
   field is weather, and the eye cannot stop reading weather. Its colours are only ever the sleeve's own, laid
   warm edge to cool edge — what reads as refraction is *separation*, light that arrived as one thing landing
   as three side by side, never a manufactured spectrum. A cover that is three shades of rust still reads as
-  rust, which is the correct answer for that record. Low-chroma covers are rejected upstream, so a dull sleeve
-  never reaches the wall.
+  rust, which is the correct answer for that record. Every sleeve reaches the wall, including the monochrome
+  ones — a white record throws white light, and that is a true rendering of it rather than a failure to find
+  a colour.
 
   **A dark record throws a dark strip, and keeps its hue.** Both had to be built; neither was free. The strip
   first divided the sleeve colour by its own luminance, which made every record throw exactly the same amount
@@ -103,6 +104,14 @@ Verify both families resolve from Google Fonts before shipping.
   purity, which is what a prism returns. A genuinely grey cover has no chromatic remainder and still comes
   back grey — `check-contrast.mjs` holds it to that, which is the line between separating the record's colour
   and manufacturing one.
+
+  The monochrome case cost a third fix. `signals.js` refused any cover under chroma 0.05, which was sound
+  while the record reached the room only as a multiplicative tint: a grey normalises to a multiplier of 1 and
+  genuinely moves nothing. Against an additive strip it was deleting a real render — a largely white sleeve
+  scored ~0.03, resolved `null`, and took the strip *and* the lean to zero, so the record disappeared from the
+  room entirely. The gate is gone. Nothing replaced it: a grey still no-ops the lean by construction, and the
+  strip already scales with the cover's luminance, so a black sleeve throws almost nothing without anyone
+  deciding it should.
 
   What remains when the strip is absent — overcast, or scrolled past — is **the lean**: a flat, motionless
   tilt of the walls toward the sleeve's dominant hue, weak enough to be felt rather than seen. The sleeve is

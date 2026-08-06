@@ -267,16 +267,37 @@ for (const c of [[.09, .08, .13], [.06, .09, .22], [.20, .05, .07], [.93, .48, .
   }
 }
 /* But it may not invent one. A grey cover has no hue to purify and must come
-   back grey — this is the check that keeps PURITY on the separating side of
-   the line between separating the record's colour and manufacturing it.
-   signals.js refuses these upstream; that guard is not what is being tested,
-   and a rule nothing checks is how an upstream guard quietly becomes
-   load-bearing. */
+   back grey — the check that keeps PURITY on the separating side of the line
+   between separating the record's colour and manufacturing it.
+
+   These covers now reach the room. signals.js used to refuse anything under
+   chroma 0.05, on the grounds that a grey was a no-op for a multiplicative
+   tint; against an additive strip that gate deleted a real render, and a
+   largely white sleeve took the strip and the lean to zero together. */
 for (const g of [[.15, .15, .15], [.5, .5, .5], [.03, .03, .03]]) {
   const s = stripColor(g);
   if (satOf(s) > 1e-6) bad(`a grey sleeve ${g} came back with hue: ${s.map((v) => v.toFixed(3))}`);
 }
 console.log(`strip purity: hue kept and never invented (grey stays grey at PURITY ${STRIP.PURITY})`);
+
+/* A white record throws white light, and a lot of it. This is the case that
+   went missing: the strip disappeared entirely under a largely white cover,
+   and the cause was two independent faults that each look like the other.
+   signals.js refused the sleeve upstream, so nothing arrived at all; and the
+   purity subtraction took its brightness from what was left after the grey
+   came out, which for a neutral is almost nothing. Either one alone still
+   leaves a white record barely visible, so both are checked. */
+const WHITE_FLOOR = 0.75;
+for (const w of [[1, 1, 1], [.94, .93, .91], [.88, .88, .90]]) {
+  const l = stripLum(w);
+  if (l < WHITE_FLOOR) bad(`a white sleeve ${w} threw only ${l.toFixed(3)} — needs ${WHITE_FLOOR}`);
+}
+console.log(`white sleeve throws ${stripLum([1, 1, 1]).toFixed(2)} (floor ${WHITE_FLOOR}), black throws ${stripLum([.02, .02, .02]).toFixed(3)}`);
+/* …and the darkness spread still has to hold across the neutral axis, which
+   is where the two faults were hiding. */
+if (!(stripLum([.95, .95, .95]) > stripLum([.5, .5, .5]) && stripLum([.5, .5, .5]) > stripLum([.08, .08, .08]))) {
+  bad("neutral sleeves do not order by brightness");
+}
 
 /* …and no sleeve may exceed the ceiling the peak bound is computed from. */
 for (const c of [[1, 0, 0], [0, 0, 1], [1, 1, 0], [.02, .02, .02], [1, 1, 1], [.9, .05, .4]]) {

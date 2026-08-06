@@ -208,12 +208,19 @@ var FRAG = [
      saturated red reaches 3.34 in red and would blow the wall out. The divisor
      guards against zero and nothing else; it clamped at 0.05 in an earlier
      draft, which made dark sleeves dim the room instead of colouring it. */
-  /* The shared neutral comes out first — see STRIP.PURITY. Without it a dark
-     cool sleeve added light that desaturated the warm wall and the band landed
-     paler than the room around it. What is left is the sleeve's own hue, only
-     purer, which is what a prism returns. */
+  /* Hue and brightness are set separately. PURITY takes the shared neutral out
+     to get the direction — without it a dark cool sleeve added light that
+     desaturated the warm wall and landed paler than the room around it — and
+     NORM sets how much arrives, from the sleeve's own luminance rather than
+     from whatever survived that subtraction. Folded together they punished
+     neutrals twice and a white record threw 0.58 of its light.
+
+     Then a per-channel ceiling: a saturated hue at unit luminance reaches 3.34
+     in one channel and would blow the wall out. light.js/stripColor() is this
+     same maths, and the sweep holds both properties. */
+  "    float tgtL = pow(max(luma(sc), 0.0001), " + f(1 - STRIP.NORM) + ");",
   "    sc -= min(min(sc.r, sc.g), sc.b) * " + f(STRIP.PURITY) + ";",
-  "    sc = min(sc / pow(max(luma(sc), 0.0001), " + f(STRIP.NORM) + "), vec3(" + f(STRIP.CH_MAX) + "));",
+  "    sc = min(sc / max(luma(sc), 0.0001) * tgtL, vec3(" + f(STRIP.CH_MAX) + "));",
   "    col += sc * plateau * taper * nodes * stripI * " + f(STRIP.GAIN) + ";",
   "  }",
 

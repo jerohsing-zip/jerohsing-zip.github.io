@@ -343,11 +343,19 @@ export function stripPeak() {
    normalisation with nothing to check, and what shipped was a pale grey band
    under every dark sleeve on the page. */
 export function stripColor(sleeve) {
+  /* PURITY picks the hue, NORM picks the brightness, and the two are kept
+     apart on purpose. They were folded together at first — brightness taken
+     from what survived the purity subtraction — which quietly punished
+     neutrals twice: a white sleeve has almost nothing left after its own grey
+     is removed, so it came out at 0.58 of the light it should throw. The
+     direction is what purity is for; the sleeve's own luminance is what sets
+     how much of it arrives. */
   var mn = Math.min(sleeve[0], sleeve[1], sleeve[2]) * STRIP.PURITY;
   var c = [sleeve[0] - mn, sleeve[1] - mn, sleeve[2] - mn];
-  var k = Math.pow(Math.max(luma(c), 1e-4), STRIP.NORM);
+  var cl = Math.max(luma(c), 1e-4);
+  var target = Math.pow(Math.max(luma(sleeve), 1e-4), 1 - STRIP.NORM);
   var out = [];
-  for (var i = 0; i < 3; i++) out.push(Math.min(c[i] / k, STRIP.CH_MAX));
+  for (var i = 0; i < 3; i++) out.push(Math.min(c[i] / cl * target, STRIP.CH_MAX));
   return out;
 }
 

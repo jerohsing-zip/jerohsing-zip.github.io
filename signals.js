@@ -147,9 +147,9 @@ export function regimeOf(altitude) {
    Spotify's CDN sends Access-Control-Allow-Origin: *, so a canvas read is
    untainted and no proxy is needed. Verified against i.scdn.co.
 
-   Returns null rather than a bad answer: a sleeve with no usable color
-   (near-monochrome, or all black/white) must leave the room's true light
-   alone instead of washing it gray. */
+   Returns null only when there is genuinely nothing to read — no url, a
+   failed load, no pixels. A monochrome sleeve is an answer, not a failure:
+   the room renders it as the light it actually is. */
 var SIZE = 32;          // 1024 samples is plenty for dominant color
 var BITS = 2;           // 4 levels per channel → 64 bins, stable at this sample count
 
@@ -198,14 +198,22 @@ export function albumPalette(url) {
       out.sort(function (a, b) { return b.score - a.score; });
       var top = out.slice(0, 3);
 
-      /* Only genuinely achromatic sleeves are refused, and only because they
-         are a no-op: the room normalises the wash to unit luminance before
-         tinting, so a grey returns a multiplier of 1 and changes nothing. The
-         strength of the tint already scales with the cover's own saturation,
-         which is why a hard chroma gate here was throwing away most
-         photographic covers for no reason. */
-      if (top[0].chroma < 0.05) { resolve(null); return; }
+      /* Every sleeve is returned, including the achromatic ones.
 
+         There was a chroma gate here, refusing anything under 0.05 on the
+         grounds that a grey was a no-op — true when the record reached the
+         room only as a multiplicative tint, since a grey normalises to a
+         multiplier of 1 and moves nothing. The prism strip is additive, and a
+         white record throws real white light, so the gate stopped describing
+         the render and started deleting from it: a largely white cover scores
+         chroma ~0.03, resolved null, and took the strip *and* the lean to zero.
+         The record vanished from the room entirely.
+
+         Nothing needs refusing in its place. A grey sleeve still no-ops the
+         lean by construction, which check-contrast.mjs proves directly rather
+         than relying on a guard up here; and the strip scales with the cover's
+         own luminance, so a black sleeve throws almost nothing without anyone
+         having to decide that it should. */
       resolve(top.map(function (x) { return x.c; }));
     };
     img.src = url;
