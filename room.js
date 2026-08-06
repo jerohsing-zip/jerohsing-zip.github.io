@@ -46,7 +46,17 @@ var FRAG = [
   "uniform vec2 uWind;",
 
   "float luma(vec3 c){ return dot(c, vec3(0.299,0.587,0.114)); }",
-  "float hash(vec2 p){ p=fract(p*vec2(123.34,345.45)); p+=dot(p,p+34.345); return fract(p.x*p.y); }",
+  /* The old hash was fract(p*vec2(123.34,345.45)) folded together. On the
+     integer lattice that noise() samples, p.x*123.34 has the same fractional
+     part as p.x*0.34 — and 0.34 is 17/50, so the x term cycled through fifty
+     values and the y term through twenty. Separable, low-period, axis-aligned:
+     exactly the recipe for rectangular cells with visible seams, which is what
+     the room grew across its walls whenever it rained. Turning the rain down
+     hid it; it did not stop being there.
+
+     This is Hoskins' hash-without-sine, which mixes all three components
+     against each other so no axis keeps its own period. */
+  "float hash(vec2 p){ vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }",
   "float noise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);",
   "  float a=hash(i),b=hash(i+vec2(1.0,0.0)),c=hash(i+vec2(0.0,1.0)),d=hash(i+vec2(1.0,1.0));",
   "  return mix(mix(a,b,f.x),mix(c,d,f.x),f.y); }",
@@ -99,22 +109,38 @@ var FRAG = [
      whole light level goes with it. One noise, read at two reaches. */
   "  float run = 0.0;",
   "  if (uWet > 0.002) {",
+  /* Finer and far weaker than it was. At 2.4 the field's lowest octave was
+     about a sixth of the viewport across, so its cells read as rectangles on
+     the wall rather than as moving light; at 3.6 they are small enough to be
+     texture. The amplitudes were the real fault: 1.10 scaled the window's
+     throw by ±39% at moderate rain, which does not modulate the window so much
+     as tear it into lobes, and 0.22 put the noise field itself on every wall in
+     the room. Rain is supposed to stop the light being still, not become
+     something you can point at. */
   "    vec2 rq = vec2(dp.x*3.2, dp.y*1.15 - uTime*0.09) + uWind*t*2.0;",
-  "    run = (fbm(rq*2.4) - 0.5) * uWet;",
-  "    thrown *= 1.0 + run*1.10;",
+  "    run = (fbm(rq*3.6) - 0.5) * uWet;",
+  "    thrown *= 1.0 + run*0.32;",
   "  }",
   "  col += lightCol * thrown * lightI * add;",
   // and the veil of scattered light the damp air itself is lit by
   "  col += lightCol * lightI * uHaze * 0.05;",
-  "  col *= 1.0 + run*0.22;",
+  "  col *= 1.0 + run*0.07;",
 
   // ---- weather, on the glass only
   "  if (pane > 0.002) {",
   "    float g = dot(col, vec3(0.333));",
   "    col = mix(col, mix(col, vec3(g), 0.55) + lightCol*0.05, uFog*pane*0.85);",
-  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(64.0, 7.0) + vec2(uWind.x*2.2, -1.0)*uTime*1.7;",
-  "    float streak = smoothstep(0.87, 1.0, fract(noise(rp)*1.7));",
-  "    col += lightCol * streak * uWet * pane * 0.30;",
+  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(26.0, 5.0) + vec2(uWind.x*2.2, -1.0)*uTime*1.7;",
+  /* 64x7 asked value noise for cells nine times taller than wide, and a value
+     noise cell is a rectangle — so at that anisotropy the streaks *were* the
+     cells, drawn as hard vertical bars across the glass. Wider and fewer. */
+  /* smoothstep on the noise itself, not on fract() of it. Taking fract of a
+     scaled noise wraps at 1.0, and that wrap is a discontinuity — it drew a
+     hard edge wherever the field crossed the boundary, which is what put
+     scratches across the glass instead of water on it. A soft band gives a
+     streak that still has a shape but no cut. */
+  "    float streak = smoothstep(0.60, 0.96, noise(rp));",
+  "    col += lightCol * streak * uWet * pane * 0.10;",
   "  }",
 
   // ---- the desk lamp, low and warm, strongest after dark.
