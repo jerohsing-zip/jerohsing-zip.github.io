@@ -1,10 +1,10 @@
 {
-  "fetchedAt": "2026-08-04T04:32:28.268Z",
+  "fetchedAt": "2026-08-04T14:44:36.143Z",
   "location": {
-    "city": "Hsinchu",
-    "region": "Taiwan",
+    "city": "East District",
+    "region": "Hsinchu City",
     "tz": "Asia/Taipei",
-    "updatedAt": "2026-08-04T10:41:21.145Z"
+    "updatedAt": "2026-08-04T12:54:13.829Z"
   },
   "playing": null,
   "shipping": {
@@ -12,6 +12,6 @@
     "repo": "jerohsing-zip/jerohsing-zip.github.io",
     "message": "pushed 0 commits",
     "url": "https://github.com/jerohsing-zip/jerohsing-zip.github.io",
-    "at": "2026-08-04T02:45:22Z"
+    "at": "2026-08-04T13:37:48Z"
   }
 }
