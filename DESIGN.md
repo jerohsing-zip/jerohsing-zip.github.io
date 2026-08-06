@@ -93,6 +93,17 @@ Verify both families resolve from Google Fonts before shipping.
   rust, which is the correct answer for that record. Low-chroma covers are rejected upstream, so a dull sleeve
   never reaches the wall.
 
+  **A dark record throws a dark strip, and keeps its hue.** Both had to be built; neither was free. The strip
+  first divided the sleeve colour by its own luminance, which made every record throw exactly the same amount
+  of light — so a dark cover landed as a pale band indistinguishable from a bright one. Dividing by a *power*
+  of that luminance gives the darkness back. The subtler fault was chromatic: a dark, cool sleeve adds light
+  that desaturates the warm wall it lands on, so the band came out *less* saturated than the room around it —
+  measurably, 0.06 against a wall at 0.36. So the shared neutral is taken out of the colour before it is
+  thrown, leaving only what carries hue. That is not invention: it is the sleeve's own colour at higher
+  purity, which is what a prism returns. A genuinely grey cover has no chromatic remainder and still comes
+  back grey — `check-contrast.mjs` holds it to that, which is the line between separating the record's colour
+  and manufacturing one.
+
   What remains when the strip is absent — overcast, or scrolled past — is **the lean**: a flat, motionless
   tilt of the walls toward the sleeve's dominant hue, weak enough to be felt rather than seen. The sleeve is
   normalised to unit luminance first, so the room shifts colour while holding its light; multiplying by a raw

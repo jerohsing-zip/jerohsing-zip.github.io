@@ -284,9 +284,46 @@ export var STRIP = {
   NODE_FLOOR: 0.72,  // caustic nodes: the strip is not evenly lit along its length
   NODE_VAR: 0.55,
   NODE_FREQ: 13.0,
+  /* How much of its own darkness a sleeve is allowed to keep.
+     The strip divides the sleeve colour by its luminance, which at NORM = 1 is
+     full normalisation: every record throws exactly as much light as every
+     other, and a dark near-neutral cover — normalised to luma 1 — lands on the
+     wall as pale grey. That reads as no relation to the sleeve at all, which
+     is the one thing the strip exists to be.
+
+     At NORM < 1 the divisor is L^NORM, so the strip's own luminance comes out
+     as L^(1-NORM) and a dark record throws a dark strip. 0.55 leaves roughly a
+     2.7x spread between a very dark sleeve and a mid one, which is visible
+     without letting a black cover go out entirely.
+
+     Not 0: that is the raw sleeve colour, and it was rejected for the lean for
+     a reason recorded in washRoom() — a dark cover then dims the room instead
+     of colouring it. This keeps most of that protection while giving the
+     darkness back. */
+  NORM: 0.55,
+  /* How much of the sleeve colour's shared neutral is taken out before it is
+     thrown. NORM fixed the brightness and left the real fault: a dark, cool
+     cover adds light that *desaturates* the warm wall it lands on, so the band
+     came out paler than the room around it — a dark navy sleeve drove the
+     band's saturation to 0.06 against a wall at 0.36. Grey, and brighter than
+     its surroundings, which is the pale band this was reported as.
+
+     Subtracting min(r,g,b) leaves only what actually carries hue. That is not
+     a manufactured colour: it is the sleeve's own hue at higher purity, and it
+     is what a prism does — it receives light and returns something more
+     saturated than it got. A genuinely grey cover still comes back grey, since
+     it has no chromatic remainder to keep, and dims rather than greying the
+     wall. signals.js refuses those upstream anyway.
+
+     Not 1.0: taking all of it makes a near-neutral sleeve land as a pure hue
+     the cover does not visibly contain, which crosses from separating the
+     record's colour into inventing it. */
+  PURITY: 0.7,
   /* Unit luminance is not unit channels — a saturated red normalised to
      luma 1 reaches 3.34 in red, which would put the peak addition near 1.0
-     and blow the wall out. The wash's own clamp exists for the same reason. */
+     and blow the wall out. The wash's own clamp exists for the same reason.
+     Still a hard min(), so it bounds the result at every NORM and stripPeak()
+     stays a true ceiling. */
   CH_MAX: 2.2
 };
 
@@ -296,6 +333,22 @@ export var STRIP = {
    claim rather than an asserted one. */
 export function stripPeak() {
   return STRIP.GAIN * (STRIP.NODE_FLOOR + STRIP.NODE_VAR) * STRIP.CH_MAX;
+}
+
+/* The colour one stop of the strip throws, before intensity and gain. Mirrors
+   the GLSL exactly; both read STRIP.NORM and STRIP.CH_MAX.
+
+   This exists so "a darker record throws a darker strip" is a checked claim.
+   It was not one before, and could not have been: at NORM = 1 the maths was a
+   normalisation with nothing to check, and what shipped was a pale grey band
+   under every dark sleeve on the page. */
+export function stripColor(sleeve) {
+  var mn = Math.min(sleeve[0], sleeve[1], sleeve[2]) * STRIP.PURITY;
+  var c = [sleeve[0] - mn, sleeve[1] - mn, sleeve[2] - mn];
+  var k = Math.pow(Math.max(luma(c), 1e-4), STRIP.NORM);
+  var out = [];
+  for (var i = 0; i < 3; i++) out.push(Math.min(c[i] / k, STRIP.CH_MAX));
+  return out;
 }
 
 /* How hard the strip is thrown, given the light there is to refract and how

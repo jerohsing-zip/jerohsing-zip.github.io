@@ -197,15 +197,23 @@ var FRAG = [
      own palette is ever drawn. */
   "    float s = clamp(across/" + f(STRIP.W) + "*0.5 + 0.5, 0.0, 1.0);",
   "    vec3 sc = s < 0.5 ? mix(uWash, uWash2, s*2.0) : mix(uWash2, uWash3, (s-0.5)*2.0);",
-  /* Unit luminance so a dark sleeve colour still throws light, then a per-
-     channel ceiling because unit luminance is not unit channels — a saturated
-     red normalised this way reaches 3.34 in red and would blow the wall out.
+  /* Divided by its own luminance raised to NORM, so a dark record throws a
+     dark strip. At NORM = 1 this was full normalisation and every sleeve threw
+     the same amount of light — a dark near-neutral cover arrived on the wall
+     as pale grey, which reads as nothing to do with the record. See
+     STRIP.NORM; light.js/stripColor() is the same maths, and the sweep holds
+     it to being monotonic in the sleeve's own brightness.
 
-     The divisor guards against zero and nothing else. It clamped at 0.05 in an
-     earlier draft, which made dark sleeves dim the room instead of colouring
-     it; light.js records the full diagnosis. CH_MAX is what bounds the result,
-     so the divisor does not need to. */
-  "    sc = min(sc / max(luma(sc), 0.0001), vec3(" + f(STRIP.CH_MAX) + "));",
+     Then a per-channel ceiling, because normalising is not unit channels — a
+     saturated red reaches 3.34 in red and would blow the wall out. The divisor
+     guards against zero and nothing else; it clamped at 0.05 in an earlier
+     draft, which made dark sleeves dim the room instead of colouring it. */
+  /* The shared neutral comes out first — see STRIP.PURITY. Without it a dark
+     cool sleeve added light that desaturated the warm wall and the band landed
+     paler than the room around it. What is left is the sleeve's own hue, only
+     purer, which is what a prism returns. */
+  "    sc -= min(min(sc.r, sc.g), sc.b) * " + f(STRIP.PURITY) + ";",
+  "    sc = min(sc / pow(max(luma(sc), 0.0001), " + f(STRIP.NORM) + "), vec3(" + f(STRIP.CH_MAX) + "));",
   "    col += sc * plateau * taper * nodes * stripI * " + f(STRIP.GAIN) + ";",
   "  }",
 

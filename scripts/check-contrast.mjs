@@ -3,8 +3,8 @@
    tokens, then checks the fixed paper surfaces.
    Run: node scripts/check-contrast.mjs */
 import {
-  tokensFor, contrast, relLum, washRoom, bandGrounds, orderByHue,
-  stripI, stripPeak, LIGHT, BAND_ALPHA
+  tokensFor, contrast, relLum, washRoom, bandGrounds, orderByHue, luma,
+  stripI, stripPeak, stripColor, LIGHT, BAND_ALPHA, STRIP
 } from "../light.js";
 
 const BODY = 4.5;      // WCAG AA, normal text
@@ -227,12 +227,72 @@ const rgb = orderByHue([[0.1, 0.2, 0.8], [0.2, 0.7, 0.2], [0.9, 0.1, 0.1]]);
 if (keyOf(rgb[0]) !== keyOf([0.9, 0.1, 0.1])) bad("orderByHue did not put the warmest colour first");
 console.log("orderByHue: permutation and warm-first hold");
 
+/* ---- a darker record throws a darker strip ----
+   The strip used to divide the sleeve colour by its full luminance, so every
+   record threw exactly as much light as every other and a dark near-neutral
+   cover landed on the wall as pale grey — a band with no visible relation to
+   the sleeve it came from, which is the one thing the strip exists to be.
+
+   STRIP.NORM is the exponent that gives the darkness back, and the property
+   worth holding is not its value but its consequence: the strip's brightness
+   must rise with the sleeve's. Checked as a strict ordering down a ramp rather
+   than at two points, because a floor, a clamp or a stray max() anywhere in
+   this maths would flatten part of the range while leaving the endpoints
+   looking correct — which is exactly how the pale grey survived review. */
+const stripLum = (c) => luma(stripColor(c));
+for (const hue of [[1, .28, .1], [.2, .45, 1], [.35, 1, .4], [1, 1, 1], [.6, .55, .5]]) {
+  let prev = -1, prevAt = 0;
+  for (let k = 0.04; k <= 1.0001; k += 0.04) {
+    const l = stripLum(hue.map((v) => v * k));
+    if (!isFinite(l) || l <= 0) bad(`stripColor is not positive for ${hue} at ${k.toFixed(2)}: ${l}`);
+    if (l <= prev) {
+      bad(`a darker sleeve threw as much light: ${hue} at ${prevAt.toFixed(2)} -> ${k.toFixed(2)} gave ${prev.toFixed(3)} -> ${l.toFixed(3)}`);
+    }
+    prev = l; prevAt = k;
+  }
+}
+/* The spread is the point. If a very dark sleeve and a mid one land within a
+   whisker of each other the maths is monotonic and still useless. */
+const DARK = [.10, .09, .12], MID = [.52, .48, .55];
+const spread = stripLum(MID) / stripLum(DARK);
+console.log(`strip darkness spread: mid sleeve throws ${spread.toFixed(2)}x a dark one (floor 1.6)`);
+if (spread < 1.6) bad(`a dark record throws nearly as much light as a mid one: ${spread.toFixed(2)}x`);
+/* The strip returns the sleeve's hue purer than it received it — that is what
+   STRIP.PURITY is for, and without it a dark cool cover desaturated the warm
+   wall it landed on and read as pale grey. */
+const satOf = (c) => { const mx = Math.max(...c), mn = Math.min(...c); return mx ? (mx - mn) / mx : 0; };
+for (const c of [[.09, .08, .13], [.06, .09, .22], [.20, .05, .07], [.93, .48, .14], [.35, .40, .33]]) {
+  if (satOf(stripColor(c)) < satOf(c) - 1e-9) {
+    bad(`the strip returned ${c} less saturated than the sleeve: ${satOf(stripColor(c)).toFixed(3)} < ${satOf(c).toFixed(3)}`);
+  }
+}
+/* But it may not invent one. A grey cover has no hue to purify and must come
+   back grey — this is the check that keeps PURITY on the separating side of
+   the line between separating the record's colour and manufacturing it.
+   signals.js refuses these upstream; that guard is not what is being tested,
+   and a rule nothing checks is how an upstream guard quietly becomes
+   load-bearing. */
+for (const g of [[.15, .15, .15], [.5, .5, .5], [.03, .03, .03]]) {
+  const s = stripColor(g);
+  if (satOf(s) > 1e-6) bad(`a grey sleeve ${g} came back with hue: ${s.map((v) => v.toFixed(3))}`);
+}
+console.log(`strip purity: hue kept and never invented (grey stays grey at PURITY ${STRIP.PURITY})`);
+
+/* …and no sleeve may exceed the ceiling the peak bound is computed from. */
+for (const c of [[1, 0, 0], [0, 0, 1], [1, 1, 0], [.02, .02, .02], [1, 1, 1], [.9, .05, .4]]) {
+  for (const v of stripColor(c)) {
+    if (!isFinite(v) || v < 0) bad(`stripColor out of range for ${c}: ${stripColor(c)}`);
+    if (v > STRIP.CH_MAX + 1e-9) bad(`stripColor exceeded CH_MAX for ${c}: ${v.toFixed(3)}`);
+  }
+}
+
 /* ---- the strip may not blow the wall out ----
-   The strip is additive and its colour is normalised to unit *luminance*,
-   which is not unit *channels*: a saturated red normalised that way reaches
+   The strip is additive and its colour is divided by its own luminance, which
+   is not unit *channels*: a saturated red normalised that way reaches
    1/0.299 in red. STRIP.CH_MAX is the ceiling that keeps the worst case —
    a fully saturated sleeve colour at a caustic node, at full intensity —
-   inside a bound that can be stated as a number instead of hoped for. */
+   inside a bound that can be stated as a number instead of hoped for. It is a
+   hard min(), so it bounds the result at every NORM. */
 const STRIP_CEILING = 0.65;
 const peak = stripPeak();
 console.log(`strip peak addition ${peak.toFixed(3)} (ceiling ${STRIP_CEILING})`);
