@@ -178,7 +178,24 @@ export function albumPalette(url) {
       for (var i = 0; i < data.length; i += 4) {
         var r = data[i], g = data[i + 1], b = data[i + 2];
         var v = Math.max(r, g, b);
-        if (v < 24 || (r > 238 && g > 238 && b > 238)) continue;   // ignore black and paper-white
+        /* Near-black is skipped: it carries no hue and is usually a border or
+           a shadow rather than the record's colour.
+
+           Paper-white used to be skipped alongside it, for the same reason and
+           with the same stale justification as the chroma gate below it — a
+           white pixel is a no-op for a multiplicative tint. Against an additive
+           strip it is the most meaningful pixel on the sleeve, and skipping it
+           was the larger of the two faults that made white covers vanish: a
+           pure white cover left zero bins and resolved null, while a white
+           cover with black type left only the anti-aliased grey edges and threw
+           a dim grey band. A cover that is mostly white is a white cover.
+
+           Removing it costs less than it looks. The score below already weights
+           by chroma, so a real colour still outranks white until white is about
+           3.7x its area; a photographic or coloured sleeve returns exactly the
+           same palette as before. What changes is the sleeve that is genuinely
+           mostly white, which is the case this is for. */
+        if (v < 24) continue;
         var k = ((r >> (8 - BITS)) << (BITS * 2)) | ((g >> (8 - BITS)) << BITS) | (b >> (8 - BITS));
         var bin = bins[k] || (bins[k] = { r: 0, g: 0, b: 0, n: 0 });
         bin.r += r; bin.g += g; bin.b += b; bin.n++;

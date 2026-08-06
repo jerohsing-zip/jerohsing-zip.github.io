@@ -113,6 +113,14 @@ Verify both families resolve from Google Fonts before shipping.
   strip already scales with the cover's luminance, so a black sleeve throws almost nothing without anyone
   deciding it should.
 
+  Behind that gate sat a larger one doing the same thing a level lower: the sampler skipped every *pixel*
+  brighter than 238 in all three channels, so a pure white cover produced no bins at all and a white cover with
+  black type produced only the anti-aliased grey edges. Both filters were written for a multiplicative wash,
+  where a paper-white pixel really is a no-op; for an additive strip it is the most meaningful pixel on the
+  sleeve. Removing it costs less than it appears — the sampler already weights bins by chroma, so a real colour
+  outranks white until white is roughly 3.7x its area, and photographic or coloured covers return byte-identical
+  palettes. What changes is the sleeve that is genuinely mostly white, which is the case it was written for.
+
   What remains when the strip is absent — overcast, or scrolled past — is **the lean**: a flat, motionless
   tilt of the walls toward the sleeve's dominant hue, weak enough to be felt rather than seen. The sleeve is
   normalised to unit luminance first, so the room shifts colour while holding its light; multiplying by a raw
