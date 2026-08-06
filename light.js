@@ -242,7 +242,14 @@ export function bandGrounds(band, room) {
 export var STRIP = {
   W: 0.028,          // half-width, aspect-corrected units
   L: 0.30,           // half-length
-  THROW: 0.26,       // how far below the caster the strip lands
+  /* How far from the caster the strip lands — below the window, above the
+     lamp. The throw was downward from both at first, which is right for a
+     window high on the wall and wrong for a lamp at y=0.17: it put the lamp's
+     strip below the floor and off the bottom of the viewport. The sweep could
+     not catch it, because stripI() models intensity and not geometry — it
+     reported the lamp casting happily after dark while the shader drew
+     nothing. Light thrown from below lands above. */
+  THROW: 0.42,
   ANG: 0.62,         // radians of sweep either side of centre
   GAIN: 0.22,        // additive strength at full intensity
   LAMP_W: 0.55,      // the lamp's weight as a caster, against the sun's

@@ -428,9 +428,25 @@ import {
   }
 
   /* ---------- start ---------- */
+  /* The strip lives in the open room above the fold. Past that the content
+     bands are over it, and a bright strip behind an 84%-opaque band is a ghost
+     with a hard edge — the artifact this whole change set out to remove. */
+  function coverNow() {
+    var band = $(".band");
+    if (!band) return 0;
+    var top = band.getBoundingClientRect().top + window.scrollY;
+    return Math.max(0, Math.min(1, window.scrollY / Math.max(top, 1)));
+  }
+  window.addEventListener("scroll", function () {
+    if (room) room.setCover(coverNow());
+  }, { passive: true });
+
   function ensureRoom() {
     if (room || reduced) return;
     room = createRoom($(".room"));   // null if WebGL is unavailable
+    /* A page loaded mid-scroll — a refresh, or a #segments deep link — starts
+       correct rather than fading the strip out after the first frame. */
+    if (room) room.setCover(coverNow());
   }
 
   wireAssets();

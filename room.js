@@ -144,6 +144,60 @@ var FRAG = [
   "  vec3 lw = clamp(mix(vec3(1.0), uLean/ll, " + f(WASH.temper) + "), vec3(0.38), vec3(1.75));",
   "  col = mix(col, col*lw, uWashI * " + f(WASH.lean) + ");",
 
+  /* ---- and as a strip of split light.
+     Something with a bevelled edge is sitting in the room's light. The record
+     is what that light breaks into: the three colours across the strip's width
+     are the sleeve's own, laid warm edge to cool edge by orderByHue(). What
+     reads as refraction is separation, not a manufactured spectrum.
+
+     There is no uTime term in here, and there must not be. A bright band on a
+     wall is furniture; a moving field is weather, and the eye cannot stop
+     reading weather. That is what the old wash got wrong. */
+  "  float sun = uWinI * (1.0 - uCloud);",
+  "  float lampw = uWarmI * " + f(STRIP.LAMP_W) + ";",
+  "  float stripI = uWashI * max(sun, lampw) * (1.0 - uCover);",
+  "  if (stripI > 0.002) {",
+  /* Cast by whichever source is actually lighting the room, so the handoff
+     from window to lamp happens on its own through dusk with nothing
+     scheduling it. */
+  "    float toLamp = lampw / (sun + lampw + 1e-4);",
+  "    vec2 src = mix(uWin + par, lp, toLamp);",
+  /* The cast angle rotates with the window's position, so the strip sweeps as
+     the sun crosses — a second clock, as the window already is. */
+  "    float ang = mix(" + f(-STRIP.ANG) + ", " + f(STRIP.ANG) + ", uWin.x);",
+  "    vec2 dir = vec2(cos(ang), sin(ang));",
+  "    vec2 nrm = vec2(-dir.y, dir.x);",
+  /* Thrown away from the caster: down from the window, up from the lamp. The
+     same toLamp that chose the source chooses the side, so the strip crosses
+     the wall as the room hands over at dusk rather than jumping. */
+  "    vec2 sc0 = src + nrm * mix(" + f(-STRIP.THROW) + ", " + f(STRIP.THROW) + ", toLamp);",
+  "    vec2 sp = vec2((uv.x-sc0.x)*asp, uv.y-sc0.y);",
+  "    float across = dot(sp, nrm), along = dot(sp, dir);",
+  /* A flat-topped plateau, not a gaussian: a gaussian peaks at the centre,
+     which would leave the two edge colours dim and defeat the separation the
+     whole strip exists to show. */
+  "    float plateau = 1.0 - smoothstep(" + f(STRIP.W * 0.55) + ", " + f(STRIP.W) + ", abs(across));",
+  "    float taper = 1.0 - smoothstep(" + f(STRIP.L * 0.45) + ", " + f(STRIP.L) + ", abs(along));",
+  /* Caustic nodes — a real strip is not evenly lit along its length. Static:
+     the noise is read at a fixed position, never advanced. */
+  "    float nodes = " + f(STRIP.NODE_FLOOR) + " + " + f(STRIP.NODE_VAR) + "*noise(vec2(along*" + f(STRIP.NODE_FREQ) + ", 3.7));",
+  /* The spectral axis is the strip's width, not its length. Blends between
+     the stops are mixes of two cover colours, so nothing outside the sleeve's
+     own palette is ever drawn. */
+  "    float s = clamp(across/" + f(STRIP.W) + "*0.5 + 0.5, 0.0, 1.0);",
+  "    vec3 sc = s < 0.5 ? mix(uWash, uWash2, s*2.0) : mix(uWash2, uWash3, (s-0.5)*2.0);",
+  /* Unit luminance so a dark sleeve colour still throws light, then a per-
+     channel ceiling because unit luminance is not unit channels — a saturated
+     red normalised this way reaches 3.34 in red and would blow the wall out.
+
+     The divisor guards against zero and nothing else. It clamped at 0.05 in an
+     earlier draft, which made dark sleeves dim the room instead of colouring
+     it; light.js records the full diagnosis. CH_MAX is what bounds the result,
+     so the divisor does not need to. */
+  "    sc = min(sc / max(luma(sc), 0.0001), vec3(" + f(STRIP.CH_MAX) + "));",
+  "    col += sc * plateau * taper * nodes * stripI * " + f(STRIP.GAIN) + ";",
+  "  }",
+
   /* ---- rain again, last: wet air takes the warmth back out of whatever the
      window, the lamp and the record have put in the room. */
   "  col = mix(col, vec3(luma(col)) * vec3(0.90, 0.98, 1.16), uWet*0.20);",
