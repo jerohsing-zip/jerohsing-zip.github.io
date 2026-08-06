@@ -97,7 +97,13 @@ var FRAG = [
      Damp the addition by how lit the room already is, so the pane still blows
      out but the room keeps its colour. */
   "  float add = 1.0 - clamp(luma(uRoom)*1.15, 0.0, 0.85);",
-  "  float thrown = pane*0.80 + spill*0.55;",
+  /* Kept apart until after the weather, because the two take rain differently.
+     Summed first, any modulation of `thrown` also modulates `spill` — and spill
+     is a broad exponential that still reads at 0.16 clear across the viewport,
+     so a sharp field applied there draws water down every wall in the room.
+     With the old smooth field that was invisible; with sparse bright runs it is
+     the whole picture. */
+  "  float tPane = pane*0.80, tSpill = spill*0.55;",
   /* ---- rain, in the room rather than on the glass.
      Streaks on the pane are a picture of rain. What makes a space read as wet
      is that its light stops being still, and that has to happen twice over.
@@ -107,7 +113,7 @@ var FRAG = [
      side of the room stayed dry while it poured. So the same field also scales
      the finished room: the only window in here is being rained on, and the
      whole light level goes with it. One noise, read at two reaches. */
-  "  float run = 0.0;",
+  "  float wetRun = 0.0, wetSoft = 0.0;",
   "  if (uWet > 0.002) {",
   /* Finer and far weaker than it was. At 2.4 the field's lowest octave was
      about a sixth of the viewport across, so its cells read as rectangles on
@@ -117,20 +123,65 @@ var FRAG = [
      as tear it into lobes, and 0.22 put the noise field itself on every wall in
      the room. Rain is supposed to stop the light being still, not become
      something you can point at. */
-  "    vec2 rq = vec2(dp.x*3.2, dp.y*1.15 - uTime*0.09) + uWind*t*2.0;",
-  "    run = (fbm(rq*3.6) - 0.5) * uWet;",
-  "    thrown *= 1.0 + run*0.32;",
+  /* Direction, speed and grain each say what phenomenon this is, and all three
+     used to say fog.
+
+     Direction: subtracting time from the sampled y holds a feature's value at
+     increasing dp.y, so the field climbed. Speed: 0.09/1.15 took thirteen
+     seconds to cross the room. Grain: the cells were elongated across the fall
+     rather than along it. Motion blur stretches a falling thing *down*, so
+     cells must run taller than wide — an earlier pass here made them wider on
+     the theory that water arrives in sheets, which produced horizontal layers
+     descending, and that is if anything a purer fog than what it replaced.
+
+     But direction, speed and grain together were still not enough, because the
+     material was wrong underneath them. fbm is the construction *for* cloud: a
+     sum of smooth octaves is continuous, soft-edged and low-contrast
+     everywhere, which is what a gas looks like. Liquid is the opposite — mostly
+     nothing, punctuated by sparse bright runs with definite edges.
+
+     So the field is thresholded rather than used raw. Measured over 300k
+     samples, smoothstep(0.55,0.72,fbm) has a median of exactly zero: more than
+     half the room carries no modulation at all, and the rest reaches 1.0. The
+     same fbm read raw stays the soft, unpointable field the room-wide term
+     always wanted. One noise, two reaches, as before — what changed is that the
+     two reaches now take different sharpness off it. */
+  "    vec2 rq = vec2(dp.x*12.0, dp.y*1.7 + uTime*0.44) + uWind*t*2.0;",
+  "    float n = fbm(rq*1.5);",
+  /* Both constants are the measured means of their own field, not guesses, so
+     each term modulates light around its unlit value instead of biasing the
+     whole room brighter whenever it rains. */
+  "    wetRun  = (smoothstep(0.55, 0.72, n) - 0.128) * uWet;",
+  "    wetSoft = (n - 0.486) * uWet;",
+  /* 0.29 is set from the measured tail: the sharp term runs -0.128..+0.872
+     about its mean, so this lands the pane between -3.7% and +25%. The
+     asymmetry is the point — a slightly dimmed baseline with bright runs
+     through it — and +25% stays clear of the ±39% that tore the window into
+     lobes.
+
+     Only the pane. Water is on the glass, so that is where it is allowed to be
+     legible; the spill is the same light after it has crossed the room, and it
+     takes the soft field instead. */
+  "    tPane  *= 1.0 + wetRun*0.29;",
+  "    tSpill *= 1.0 + wetSoft*0.12;",
   "  }",
-  "  col += lightCol * thrown * lightI * add;",
+  "  col += lightCol * (tPane + tSpill) * lightI * add;",
   // and the veil of scattered light the damp air itself is lit by
   "  col += lightCol * lightI * uHaze * 0.05;",
-  "  col *= 1.0 + run*0.07;",
+  /* The room keeps the soft field, not the sharp one. Sparse bright runs
+     crawling across the walls behind text is exactly the thing the paragraph
+     above refuses; here the rain is only allowed to stop the light being
+     still. ±2% at the extreme. */
+  "  col *= 1.0 + wetSoft*0.06;",
 
   // ---- weather, on the glass only
   "  if (pane > 0.002) {",
   "    float g = dot(col, vec3(0.333));",
   "    col = mix(col, mix(col, vec3(g), 0.55) + lightCol*0.05, uFog*pane*0.85);",
-  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(26.0, 5.0) + vec2(uWind.x*2.2, -1.0)*uTime*1.7;",
+  /* +1.0, not -1.0. Adding time to the sampled y walks a feature down the glass;
+     subtracting it walked them up, which is not what DESIGN.md means by "the
+     falling streaks" and not what rain does. */
+  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(26.0, 5.0) + vec2(uWind.x*2.2, 1.0)*uTime*1.7;",
   /* 64x7 asked value noise for cells nine times taller than wide, and a value
      noise cell is a rectangle — so at that anisotropy the streaks *were* the
      cells, drawn as hard vertical bars across the glass. Wider and fewer. */
@@ -202,9 +253,11 @@ var FRAG = [
      same toLamp that chose the source chooses the side, so the strip crosses
      the wall as the room hands over at dusk rather than jumping. */
   "    vec2 sc0 = src + nrm * mix(" + f(-STRIP.THROW) + ", " + f(STRIP.THROW) + ", toLamp);",
-  /* …held clear of the plate. A morning window is behind the plate and so is
-     what it casts; see STRIP.CLEAR for what this costs and why it is paid. */
-  "    sc0.x = max(sc0.x, " + f(STRIP.CLEAR) + ");",
+  /* …held clear of the plate, and clear of the right edge. A morning window is
+     behind the plate and so is what it casts; a late western one throws the
+     strip off the viewport entirely. See STRIP.CLEAR and STRIP.CLEAR_R for what
+     each costs and why it is paid. */
+  "    sc0.x = clamp(sc0.x, " + f(STRIP.CLEAR) + ", " + f(STRIP.CLEAR_R) + ");",
   /* The pointer moves it last, so the clamp above cannot flatten the sideways
      component — and so the lamp gets parallax too, which it did not when this
      rode on uWin and toLamp faded it to nothing after dark. */

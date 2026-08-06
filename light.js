@@ -290,6 +290,23 @@ export var STRIP = {
      footing is held. Past noon the geometry clears the plate on its own and
      this stops applying — max(), so nothing jumps when it does. */
   CLEAR: 0.52,
+  /* And never right of this, for the same reason in mirror. CLEAR bounds the
+     morning; nothing bounded the afternoon, and the cast angle keeps pushing
+     the strip right long after the window has stopped moving. The throw is
+     along nrm, whose x component grows with the angle, so the two compound:
+     at window x 0.96 the strip's centre lands at 1.187 and its left edge at
+     0.994 — the record's colour leaves the viewport entirely on a late western
+     sun, with nothing on screen to say a record is playing.
+
+     0.88 keeps roughly two thirds of the strip in frame at the extreme and
+     lets the rest run off the edge, which is what light does at a frame
+     boundary; pinning the whole strip inside would have frozen its sweep
+     across a much wider band of the afternoon. Engages from about window x
+     0.78, and min() like CLEAR's max(), so nothing jumps when it takes hold.
+
+     Daylight only. Once the lamp is the caster the throw flips sign and the
+     centre tops out at 0.733 on its own, so this never binds after dark. */
+  CLEAR_R: 0.88,
   /* How much the strip answers the pointer, against the room's own parallax.
      It is applied after CLEAR, not before — folded in earlier it went through
      the max() and the strip lost all sideways movement for the seven hours the
