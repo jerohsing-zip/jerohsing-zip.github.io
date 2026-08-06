@@ -39,6 +39,7 @@ var FRAG = [
   "uniform vec3 uRoom;",             // ambient wall, cloud already in it
   "uniform vec3 uWarm; uniform float uWarmI;",   // tungsten lamp
   "uniform vec3 uWash; uniform vec3 uWash2; uniform vec3 uWash3;",   // the sleeve, hue-ordered across the strip
+  "uniform vec3 uWash4; uniform vec3 uWash5;",                       // …five stops, when the cover has five
   "uniform vec3 uLean; uniform float uWashI;",   // the sleeve's dominant colour, and whether a record is on
   "uniform float uCover;",           // how much of the room the page has scrolled over
   "uniform float uCloud, uWet, uFog, uHaze;",
@@ -187,16 +188,30 @@ var FRAG = [
   /* A flat-topped plateau, not a gaussian: a gaussian peaks at the centre,
      which would leave the two edge colours dim and defeat the separation the
      whole strip exists to show. */
-  "    float plateau = 1.0 - smoothstep(" + f(STRIP.W * 0.55) + ", " + f(STRIP.W) + ", abs(across));",
+  "    float plateau = 1.0 - smoothstep(" + f(STRIP.W * STRIP.EDGE) + ", " + f(STRIP.W) + ", abs(across));",
   "    float taper = 1.0 - smoothstep(" + f(STRIP.L * 0.45) + ", " + f(STRIP.L) + ", abs(along));",
+  /* The bloom. Much wider, much dimmer, no nodes — light spilling past its own
+     edge, which is the difference between something glowing and something
+     painted. It is also what makes the strip read as wide: the core stays thin
+     enough for five colours to separate, and the halo carries the size. */
+  "    float halo = 1.0 - smoothstep(0.0, " + f(STRIP.W * STRIP.HALO_W) + ", abs(across));",
   /* Caustic nodes — a real strip is not evenly lit along its length. Static:
      the noise is read at a fixed position, never advanced. */
   "    float nodes = " + f(STRIP.NODE_FLOOR) + " + " + f(STRIP.NODE_VAR) + "*noise(vec2(along*" + f(STRIP.NODE_FREQ) + ", 3.7));",
   /* The spectral axis is the strip's width, not its length. Blends between
      the stops are mixes of two cover colours, so nothing outside the sleeve's
      own palette is ever drawn. */
+  /* Five stops across four segments, as a chain of mixes rather than nested
+     ternaries: each clamp is zero until its segment begins and one after it
+     ends, so every mix takes over exactly where the last finished. Branchless,
+     and it degrades on its own — setWash repeats the last colour it was given,
+     so a cover with three stops simply has its final segments collapse. */
   "    float s = clamp(across/" + f(STRIP.W) + "*0.5 + 0.5, 0.0, 1.0);",
-  "    vec3 sc = s < 0.5 ? mix(uWash, uWash2, s*2.0) : mix(uWash2, uWash3, (s-0.5)*2.0);",
+  "    float u = s * 4.0;",
+  "    vec3 sc = mix(uWash, uWash2, clamp(u, 0.0, 1.0));",
+  "    sc = mix(sc, uWash3, clamp(u - 1.0, 0.0, 1.0));",
+  "    sc = mix(sc, uWash4, clamp(u - 2.0, 0.0, 1.0));",
+  "    sc = mix(sc, uWash5, clamp(u - 3.0, 0.0, 1.0));",
   /* Divided by its own luminance raised to NORM, so a dark record throws a
      dark strip. At NORM = 1 this was full normalisation and every sleeve threw
      the same amount of light — a dark near-neutral cover arrived on the wall
@@ -221,7 +236,11 @@ var FRAG = [
   "    float tgtL = pow(max(luma(sc), 0.0001), " + f(1 - STRIP.NORM) + ");",
   "    sc -= min(min(sc.r, sc.g), sc.b) * " + f(STRIP.PURITY) + ";",
   "    sc = min(sc / max(luma(sc), 0.0001) * tgtL, vec3(" + f(STRIP.CH_MAX) + "));",
-  "    col += sc * plateau * taper * nodes * stripI * " + f(STRIP.GAIN) + ";",
+  /* Core and halo in one add, so the bracket is exactly what stripPeak() bounds
+     — (plateau*nodes + halo*HALO_GAIN), each term at most 1 except nodes. Split
+     into two statements the bound would still hold, but nothing would make it
+     obvious that it has to cover both. */
+  "    col += sc * (plateau*nodes + halo*" + f(STRIP.HALO_GAIN) + ") * taper * stripI * " + f(STRIP.GAIN) + ";",
   "  }",
 
   /* ---- rain again, last: wet air takes the warmth back out of whatever the
@@ -269,7 +288,8 @@ export function createRoom(host) {
     res: u("uRes"), time: u("uTime"), mouse: u("uMouse"),
     win: u("uWin"), winI: u("uWinI"), light: u("uLight"), room: u("uRoom"),
     warm: u("uWarm"), warmI: u("uWarmI"), wash: u("uWash"), washI: u("uWashI"),
-    wash2: u("uWash2"), wash3: u("uWash3"), lean: u("uLean"), cover: u("uCover"),
+    wash2: u("uWash2"), wash3: u("uWash3"), wash4: u("uWash4"), wash5: u("uWash5"),
+    lean: u("uLean"), cover: u("uCover"),
     cloud: u("uCloud"), wet: u("uWet"), fog: u("uFog"), haze: u("uHaze"), wind: u("uWind")
   };
 
@@ -295,7 +315,7 @@ export function createRoom(host) {
   var cur = {
     win: [0.5, 0.6], winI: 0, light: [0, 0, 0], room: [0, 0, 0],
     warm: [0, 0, 0], warmI: 0, wash: [0, 0, 0], wash2: [0, 0, 0], wash3: [0, 0, 0],
-    lean: [0, 0, 0], washI: 0, cover: 0,
+    wash4: [0, 0, 0], wash5: [0, 0, 0], lean: [0, 0, 0], washI: 0, cover: 0,
     cloud: 0, wet: 0, fog: 0, haze: 0, wind: [0, 0]
   };
   var tgt = JSON.parse(JSON.stringify(cur));
@@ -323,9 +343,16 @@ export function createRoom(host) {
     if (!colors || !colors.length) { tgt.washI = 0; return; }
     var o = orderByHue(colors);
     tgt.lean = colors[0].slice();
-    tgt.wash = o[0].slice();
-    tgt.wash2 = (o[1] || o[0]).slice();
-    tgt.wash3 = (o[2] || o[1] || o[0]).slice();
+    /* Each stop falls back to the one before it, so a cover that yielded three
+       colours collapses its last two segments instead of mixing toward black.
+       signals.js under-fills on purpose when a sleeve lacks the variety for
+       five, and this is the end of that contract. */
+    var at = function (i) { return o[Math.min(i, o.length - 1)].slice(); };
+    tgt.wash = at(0);
+    tgt.wash2 = at(1);
+    tgt.wash3 = at(2);
+    tgt.wash4 = at(3);
+    tgt.wash5 = at(4);
     tgt.washI = typeof amount === "number" ? amount : 1;
   }
 
@@ -352,7 +379,8 @@ export function createRoom(host) {
     ease3(cur.light, tgt.light, 0.035); ease3(cur.room, tgt.room, 0.035);
     ease3(cur.warm, tgt.warm, 0.035);
     ease3(cur.wash, tgt.wash, 0.03); ease3(cur.wash2, tgt.wash2, 0.03);
-    ease3(cur.wash3, tgt.wash3, 0.03); ease3(cur.lean, tgt.lean, 0.03);
+    ease3(cur.wash3, tgt.wash3, 0.03); ease3(cur.wash4, tgt.wash4, 0.03);
+    ease3(cur.wash5, tgt.wash5, 0.03); ease3(cur.lean, tgt.lean, 0.03);
     cur.winI = ease(cur.winI, tgt.winI, 0.035);
     cur.warmI = ease(cur.warmI, tgt.warmI, 0.035);
     cur.washI = ease(cur.washI, tgt.washI, 0.035);     // the record fades in and out slowly
@@ -378,6 +406,8 @@ export function createRoom(host) {
     gl.uniform3fv(U.wash2, cur.wash2);
     gl.uniform1f(U.washI, cur.washI);
     gl.uniform3fv(U.wash3, cur.wash3);
+    gl.uniform3fv(U.wash4, cur.wash4);
+    gl.uniform3fv(U.wash5, cur.wash5);
     gl.uniform3fv(U.lean, cur.lean);
     gl.uniform1f(U.cover, cur.cover);
     gl.uniform1f(U.cloud, cur.cloud);

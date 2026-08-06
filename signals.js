@@ -209,6 +209,37 @@ function dist(a, b) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
+/* Every stop after the first has to stand this far from all the ones already
+   chosen. Five stops off a two-colour sleeve would otherwise come back as five
+   shades of the same thing, which is worse than three honest ones — the strip
+   would read as a gradient and the extra stops would be padding. Under-filling
+   is the correct answer for a plain cover; room.js already draws however many
+   it is given. */
+var MIN_SEP = 0.20;
+
+/* And the second vibrant has to be a different *hue* from the first, not just
+   far enough away in RGB. Without this, a cover with one strong colour returns
+   a light and a dark version of it and calls them two details. */
+var HUE_SEP = 40;
+
+function hueOf(c) {
+  var mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]), d = mx - mn;
+  if (d < 1e-6) return 0;
+  var h;
+  if (mx === c[0]) h = ((c[1] - c[2]) / d + 6) % 6;
+  else if (mx === c[1]) h = (c[2] - c[0]) / d + 2;
+  else h = (c[0] - c[1]) / d + 4;
+  return h * 60;
+}
+function hueGap(a, b) {
+  var d = Math.abs(hueOf(a) - hueOf(b)) % 360;
+  return d > 180 ? 360 - d : d;
+}
+function farFrom(y, picked) {
+  for (var i = 0; i < picked.length; i++) if (dist(y.c, picked[i].c) < MIN_SEP) return false;
+  return true;
+}
+
 /* Finer bins buy hue fidelity and cost coherence: a single region of the sleeve
    spreads across neighbouring cells, and each fragment is then too small to
    clear a population floor that the whole region would clear easily. Measured
@@ -318,8 +349,8 @@ export function albumPalette(url) {
       if (!raw.length) { resolve(null); return; }
       var cand = mergeNear(raw);
 
-      /* ---- three stops, three different questions ----
-         The strip lays three colours across its width, and they used to be the
+      /* ---- five stops, five different questions ----
+         The strip lays its colours across its width, and they used to be the
          top three of one ranked list — n * (0.3 + chroma). One score cannot
          answer two questions, and that one answered neither well: it returned
          three colours that were each somewhat-dominant and somewhat-colourful,
@@ -366,23 +397,54 @@ export function albumPalette(url) {
          the dark figures on that sleeve were right there. Weighting by tonal
          distance picks them, and on every cover where the two rules disagreed
          the tonal one was better and never worse. */
+      var picked = [A];
+      if (B) picked.push(B);
+
       var C = null, bestC = -1;
       for (var c1 = 0; c1 < cand.length; c1++) {
         var y = cand[c1];
         if (y === A || y === B) continue;
-        if (y.pop < MIN_POP) continue;
-        if (dist(y.c, A.c) < 0.20) continue;
-        if (B && dist(y.c, B.c) < 0.20) continue;
+        if (y.pop < MIN_POP || !farFrom(y, picked)) continue;
         var sc = y.pop * Math.abs(y.light - A.light);
         if (sc > bestC) { bestC = sc; C = y; }
       }
+      if (C) picked.push(C);
+
+      /* D — the second detail. Same vibrant target as B, but required to be a
+         different hue from it, so a cover with one strong colour does not
+         return a light and a dark version of it and call them two details. */
+      var D = null, bestD = -1;
+      for (var d1 = 0; d1 < cand.length; d1++) {
+        var z = cand[d1];
+        if (z === A || z === B || z === C) continue;
+        if (z.pop < MIN_POP || !farFrom(z, picked)) continue;
+        if (z.sat < VIBRANT_MIN_SAT) continue;
+        if (z.light < VIBRANT_MIN_L || z.light > VIBRANT_MAX_L) continue;
+        if (B && hueGap(z.c, B.c) < HUE_SEP) continue;
+        var sd = W_SAT * z.sat + W_POP * (z.pop / maxPop);
+        if (sd > bestD) { bestD = sd; D = z; }
+      }
+      if (D) picked.push(D);
+
+      /* E — the second dominant. Whatever is left with the most of the sleeve
+         behind it, once everything already chosen has been stood clear of. No
+         target of its own: by this point the strip has its dominant, its two
+         details and its tonal counterpart, and what it still wants is simply
+         more of the record. */
+      var E = null, bestE = -1;
+      for (var e1 = 0; e1 < cand.length; e1++) {
+        var v = cand[e1];
+        if (v === A || v === B || v === C || v === D) continue;
+        if (v.pop < MIN_POP || !farFrom(v, picked)) continue;
+        if (v.pop > bestE) { bestE = v.pop; E = v; }
+      }
+      if (E) picked.push(E);
 
       /* Order matters to the caller: room.js reads [0] as the dominant for the
-         lean, and hue-orders all three across the strip's width. Sparse covers
-         legitimately yield fewer than three. */
-      var picked = [A];
-      if (B) picked.push(B);
-      if (C) picked.push(C);
+         lean, and hue-orders the rest across the strip's width. A sleeve with
+         little variety legitimately yields fewer than five, and that is the
+         right answer — MIN_SEP would rather return three honest colours than
+         pad to five with shades of one. */
       resolve(picked.map(function (x) { return x.c; }));
     };
     img.src = url;
