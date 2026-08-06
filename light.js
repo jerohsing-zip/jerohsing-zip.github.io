@@ -173,8 +173,15 @@ var BAND_LIGHT = 0.62;
    are shared: room.js interpolates WASH into the shader and
    scripts/check-contrast.mjs replays the same maths to prove the composite
    still clears WCAG against every room the shader can produce. One definition,
-   or the proof drifts away from the render. */
-export var BAND_ALPHA = 0.84;
+   or the proof drifts away from the render.
+
+   0.84 -> 0.78: more of the room shows through the page. This is the cheapest
+   0.06 available — the derived text tokens absorb it entirely and the worst
+   composite holds at 4.60:1, exactly where it was. It does not stay cheap.
+   0.76 costs 0.03 of contrast, and by 0.74 the sweep fails in sixteen places.
+   The floor is 4.5 and it is not negotiable, so this is close to the end of
+   the budget rather than a step along it. */
+export var BAND_ALPHA = 0.78;
 
 /* The record's standing presence in the room: a flat lean of the walls toward
    the sleeve's hue. Motionless, and weak enough that it is felt rather than
