@@ -268,6 +268,17 @@ export var STRIP = {
      footing is held. Past noon the geometry clears the plate on its own and
      this stops applying — max(), so nothing jumps when it does. */
   CLEAR: 0.52,
+  /* How much the strip answers the pointer, against the room's own parallax.
+     It is applied after CLEAR, not before — folded in earlier it went through
+     the max() and the strip lost all sideways movement for the seven hours the
+     clamp is active, leaving only the vertical component. It reacted, so it
+     looked deliberate, which is the worst kind of wrong.
+
+     Wider in x than in y because that is the axis the strip is thin on: at
+     x3.2 the slide is about three times the strip's own half-width and reads
+     as the light shifting, while the same gain in y would just bob it. */
+  PAR_X: 3.2,
+  PAR_Y: 1.0,
   GAIN: 0.22,        // additive strength at full intensity
   LAMP_W: 0.55,      // the lamp's weight as a caster, against the sun's
   NODE_FLOOR: 0.72,  // caustic nodes: the strip is not evenly lit along its length

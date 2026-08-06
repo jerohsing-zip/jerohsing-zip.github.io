@@ -165,7 +165,7 @@ var FRAG = [
      from window to lamp happens on its own through dusk with nothing
      scheduling it. */
   "    float toLamp = lampw / (sun + lampw + 1e-4);",
-  "    vec2 src = mix(uWin + par, lp, toLamp);",
+  "    vec2 src = mix(uWin, lp, toLamp);",
   /* The cast angle rotates with the window's position, so the strip sweeps as
      the sun crosses — a second clock, as the window already is. */
   "    float ang = mix(" + f(-STRIP.ANG) + ", " + f(STRIP.ANG) + ", uWin.x);",
@@ -178,6 +178,10 @@ var FRAG = [
   /* …held clear of the plate. A morning window is behind the plate and so is
      what it casts; see STRIP.CLEAR for what this costs and why it is paid. */
   "    sc0.x = max(sc0.x, " + f(STRIP.CLEAR) + ");",
+  /* The pointer moves it last, so the clamp above cannot flatten the sideways
+     component — and so the lamp gets parallax too, which it did not when this
+     rode on uWin and toLamp faded it to nothing after dark. */
+  "    sc0 += par * vec2(" + f(STRIP.PAR_X) + ", " + f(STRIP.PAR_Y) + ");",
   "    vec2 sp = vec2((uv.x-sc0.x)*asp, uv.y-sc0.y);",
   "    float across = dot(sp, nrm), along = dot(sp, dir);",
   /* A flat-topped plateau, not a gaussian: a gaussian peaks at the centre,
