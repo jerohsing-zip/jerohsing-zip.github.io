@@ -1,23 +1,15 @@
-<!--
-  DIRECTION CONTRACT — NIGHT SERVICE (live portfolio) · Experience
-  THESIS: A broadcast in progress from wherever Jerome actually is. Refuses the résumé-first hero and the project-card grid.
-  OWN-WORLD: A booth lit by three real signals — a window at the sun's true bearing, a tungsten desk lamp, and the colour of the record now playing. Bone paper plates over a room that spans daylight to deep-teal night; oxblood reserved for the on-air lamp and nothing else. Archivo at expanded width as station idents, Sometype Mono for genuine measurement.
-  STORY: A recruiter lands mid-transmission, is identified immediately by a persistent ident, reads the segments and the record, and opens the line.
-  FIRST VIEWPORT: Full-bleed room lit from the window at the sun's real bearing; the ident plate fixed top-left carrying name, role and contact; the current state — local time, transmitting origin, conditions, what's spinning — as an opaque bone plate; no nav chrome, no hero.
-  FORM: NIGHT SERVICE. Candidate 3 of 7 on the grounded list; seed 80c357fb.
--->
 <!DOCTYPE html>
 <html lang="en" data-scene="dark">
 <head>
-<meta charset="utf-8" />
-<script>document.documentElement.classList.add("js");</script>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Jerome Hsing · on air</title>
-<meta name="description" content="A live signal from Jerome Hsing: engineer, economist, consultant. Where he is right now, what the weather is doing there, and what's on the turntable." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Sometype+Mono:wght@400..600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8" />
+  <script>document.documentElement.classList.add("js");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jerome Hsing · on air</title>
+  <meta name="description" content="A live signal from Jerome Hsing: Where he is right now, what the weather is doing there, and what's on the turntable." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Sometype+Mono:wght@400..600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
@@ -27,13 +19,8 @@
   <div class="room__grain"></div>
 </div>
 
-<a class="skip" href="#segments">Skip to the work</a>
+<a class="skip" href="#record">Skip to the work</a>
 
-<!--
-  The ident. Persistent and opaque by design: real broadcasts identify
-  themselves constantly and briefly, and this is the one thing a recruiter
-  must never have to hunt for. It owes the room nothing.
--->
 <header class="ident">
   <div class="ident__face" data-face hidden>
     <img src="assets/jerome.jpg" alt="Jerome Hsing" width="112" height="112" data-portrait />
@@ -44,13 +31,9 @@
       <span class="mono" data-onair>ON AIR</span>
     </p>
     <h1 class="ident__name">Jerome Hsing</h1>
-    <p class="ident__role">Software engineer &amp; consultant. Computer science and economics. Japanese, Mandarin, English.</p>
     <p class="ident__links">
       <a href="mailto:jerohsing@gmail.com">jerohsing@gmail.com</a>
       <a data-resume href="JeromeHsing_Resume.pdf">Résumé</a>
-      <!-- LinkedIn is injected by app.js only when a real URL is configured.
-           The previous build shipped a visible "[link TBD]" pointing at the
-           bare linkedin.com homepage; a dead link is worse than no link. -->
     </p>
   </div>
 </header>
@@ -62,8 +45,6 @@
     <div class="plate">
       <div class="plate__head">
         <span class="plate__k mono">Transmitting from</span>
-        <!-- Neutral until location.json resolves. No city may be hardcoded:
-             Jerome is itinerant and a stale city is a lie the whole page rests on. -->
         <span class="plate__place" data-city>—</span>
         <span class="plate__meta mono">
           <span data-tz></span><span data-wx></span>
@@ -77,8 +58,7 @@
           <span class="cue__k mono">On the turntable</span>
           <span class="cue__art" data-art aria-hidden="true"></span>
           <!-- Pre-JS placeholder only, and deliberately neutral: it must match
-               the empty render exactly. A fabricated track has shipped here as a
-               permanent lie before. Do not put real-looking text back in. -->
+               the empty render exactly. Do not put real-looking text back in. -->
           <span class="cue__body">
             <span class="cue__title" data-listen-title>nothing spinning</span>
             <span class="cue__sub mono" data-listen-artist></span>
@@ -112,49 +92,6 @@
     </div>
   </section>
 
-  <!-- ===== SEGMENTS — work ===== -->
-  <section class="band" id="segments" aria-labelledby="segments-h">
-    <div class="band__head">
-      <h2 class="band__title" id="segments-h">Segments</h2>
-      <p class="band__note mono">Things built, and what they had to solve.</p>
-    </div>
-
-    <ol class="segs">
-      <li class="seg">
-        <div class="seg__meta mono">
-          <span class="seg__year">2023</span>
-          <span>AI Exploration Intern</span>
-        </div>
-        <div class="seg__main">
-          <h3 class="seg__name">HireFlow: Candidate-Fit Engine</h3>
-          <p class="seg__desc">A GPT-4 proof-of-concept that reads a résumé against a role and explains, in plain language, why a candidate fits. Paired with a Python service for natural-language candidate search.</p>
-          <ul class="tags mono"><li>GPT-4 API</li><li>Python</li><li>NLP</li></ul>
-        </div>
-      </li>
-      <li class="seg">
-        <div class="seg__meta mono">
-          <span class="seg__year">2023</span>
-          <span>Full-Stack Engineer Intern</span>
-        </div>
-        <div class="seg__main">
-          <h3 class="seg__name">Moongrove: AI Product Imagery</h3>
-          <p class="seg__desc">Shipped production web-app components for an AI product-image platform, working shoulder-to-shoulder with design and product, and wrote end-to-end tests to keep the surface honest.</p>
-          <ul class="tags mono"><li>React</li><li>Full-stack</li><li>E2E Testing</li></ul>
-        </div>
-      </li>
-      <li class="seg">
-        <div class="seg__meta mono">
-          <span class="seg__year">2023</span>
-          <span>WashU · Creative Programming</span>
-        </div>
-        <div class="seg__main">
-          <h3 class="seg__name">Rapid Prototypes: Full-Stack Web Apps</h3>
-          <p class="seg__desc">A run of full-stack apps built end to end across a semester: React and SASS on the front, PHP, SQL and MongoDB behind. Built fast, shipped often, learned in public.</p>
-          <ul class="tags mono"><li>React</li><li>SASS</li><li>PHP</li><li>SQL</li><li>MongoDB</li></ul>
-        </div>
-      </li>
-    </ol>
-  </section>
 
   <!-- ===== THE RECORD — career. The double meaning is the point. ===== -->
   <section class="band" id="record" aria-labelledby="record-h">
@@ -177,7 +114,7 @@
         <div class="entry__main">
           <h3 class="entry__role">Consulting Intern · Team Lead <span class="entry__co">Plus Curiosity</span></h3>
           <p class="entry__where mono">Placemaking consulting · Tokyo</p>
-          <p class="entry__desc">Designed and translated the company overview deck for Japanese and English audiences, co-authored deliverables used with top Japanese land developers, and led a team of 12 interns on daily triage.</p>
+          <p class="entry__desc">Designed and translated the company overview deck for Japanese and English audiences, co-authored deliverables used with top Japanese land developers, and led a team of 12 interns on daily standups.</p>
         </div>
       </li>
       <li class="entry">

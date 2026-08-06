@@ -78,9 +78,68 @@ Verify both families resolve from Google Fonts before shipping.
   it, so the window loses its edge and carries further. Wind speed and direction set the drift. Every field of
   the same Open-Meteo call is spent — temperature, code, cloud, wind, humidity and precipitation all render
   something, and nothing is requested that does not.
-- **The turntable wash** — the album art of the current track, quantized to 2–3 dominant colors and thrown
-  across the room as bounded colored light. Low-chroma covers are rejected so a dull sleeve never washes the
-  room out. Decays back to true room light when playback stops.
+- **The prism** — the record's colour, arriving as a narrow strip of split light rather than as weather in the
+  air. Something with a bevelled edge is sitting in the room's light; the record is what that light breaks
+  into. It is cast by whichever source is actually lighting the room — the window by day, the desk lamp after
+  dark — so the handover happens on its own through dusk with nothing scheduling it, and it sweeps as the sun
+  crosses, a second clock. Cloud kills it outright, because a caustic needs direct light and an overcast
+  midday has none to give. It fades out as the page scrolls over the room, rather than ghosting through a
+  translucent band and being cut by its edge.
+
+  **It does not move.** That is the design, not an economy. A bright band on a wall is furniture; a moving
+  field is weather, and the eye cannot stop reading weather. Its colours are only ever the sleeve's own, laid
+  warm edge to cool edge — what reads as refraction is *separation*, light that arrived as one thing landing
+  as three side by side, never a manufactured spectrum. A cover that is three shades of rust still reads as
+  rust, which is the correct answer for that record. Every sleeve reaches the wall, including the monochrome
+  ones — a white record throws white light, and that is a true rendering of it rather than a failure to find
+  a colour.
+
+  **A dark record throws a dark strip, and keeps its hue.** Both had to be built; neither was free. The strip
+  first divided the sleeve colour by its own luminance, which made every record throw exactly the same amount
+  of light — so a dark cover landed as a pale band indistinguishable from a bright one. Dividing by a *power*
+  of that luminance gives the darkness back. The subtler fault was chromatic: a dark, cool sleeve adds light
+  that desaturates the warm wall it lands on, so the band came out *less* saturated than the room around it —
+  measurably, 0.06 against a wall at 0.36. So the shared neutral is taken out of the colour before it is
+  thrown, leaving only what carries hue. That is not invention: it is the sleeve's own colour at higher
+  purity, which is what a prism returns. A genuinely grey cover has no chromatic remainder and still comes
+  back grey — `check-contrast.mjs` holds it to that, which is the line between separating the record's colour
+  and manufacturing one.
+
+  The monochrome case cost a third fix. `signals.js` refused any cover under chroma 0.05, which was sound
+  while the record reached the room only as a multiplicative tint: a grey normalises to a multiplier of 1 and
+  genuinely moves nothing. Against an additive strip it was deleting a real render — a largely white sleeve
+  scored ~0.03, resolved `null`, and took the strip *and* the lean to zero, so the record disappeared from the
+  room entirely. The gate is gone. Nothing replaced it: a grey still no-ops the lean by construction, and the
+  strip already scales with the cover's luminance, so a black sleeve throws almost nothing without anyone
+  deciding it should.
+
+  Behind that gate sat a larger one doing the same thing a level lower: the sampler skipped every *pixel*
+  brighter than 238 in all three channels, so a pure white cover produced no bins at all and a white cover with
+  black type produced only the anti-aliased grey edges. Both filters were written for a multiplicative wash,
+  where a paper-white pixel really is a no-op; for an additive strip it is the most meaningful pixel on the
+  sleeve. Removing it costs less than it appears — the sampler already weights bins by chroma, so a real colour
+  outranks white until white is roughly 3.7x its area, and photographic or coloured covers return byte-identical
+  palettes. What changes is the sleeve that is genuinely mostly white, which is the case it was written for.
+
+  What remains when the strip is absent — overcast, or scrolled past — is **the lean**: a flat, motionless
+  tilt of the walls toward the sleeve's dominant hue, weak enough to be felt rather than seen. The sleeve is
+  normalised to unit luminance first, so the room shifts colour while holding its light; multiplying by a raw
+  cover colour just darkens, and a navy sleeve turned the room muddy instead of blue. Both decay back to true
+  room light when playback stops.
+
+  *What was here before, and why it went.* The wash was a volumetric fbm field drifting on the wind, with a
+  daylight-gain stage bolted on because a tint calibrated to read after dark was invisible at noon. The gain
+  solved a real problem, and it went with the mechanism that had it: there is no volumetric tint left to
+  defend against the sun. The field itself was the deeper mistake — viewport-scale colour moving behind text
+  is impossible to stop reading, and behind an 84%-opaque band it read as glass. The proofs that guarded the
+  gain were deleted with it, and replaced by proofs of the outcome it existed for: that the record is never
+  entirely absent from the room, and that neither lean nor strip can drive the room out of range.
+
+  *One honest departure.* Everything else in this room is a consequence of where the light is. Between about
+  05:00 and 11:00 the window sits behind the ident plate, and so did everything it cast — the record had
+  nothing but the lean for seven hours of every day. So the strip's horizontal footing is held clear of the
+  plate for those hours. It keeps its angle, its length and its rise; only its footing is placed rather than
+  thrown, and it stops applying the moment the geometry clears the plate on its own.
 - **The on-air lamp** — lit only while data is genuinely live. Replaces the previous world's abstract `●` pulse
   with something that means something.
 - **The ident** — a persistent opaque plate carrying name, what he does, where he is transmitting from, and how
@@ -124,13 +183,13 @@ complete page; it is never presented as a real value.
 ## Accessibility
 
 - Body ≥4.5:1 and large text ≥3:1, verified against **every** state the room can reach: all six solar regimes
-  at every cloud cover, plus a saturated album wash, in both light and dark scene states. The opaque `--paper`
+  at every cloud cover, plus a saturated album lean, in both light and dark scene states. The opaque `--paper`
   credential surfaces make this structurally achievable rather than a per-state negotiation.
 - The content bands are **translucent**, so the room stays visible the whole way down the page rather than
   being lidded over below the fold. Text is therefore derived and checked against the *composite* — band over
   the brightest and darkest room the shader can put behind it — not against the band's own colour. The
   translucency costs contrast, and it is spent from a budget `scripts/check-contrast.mjs` measures.
 - Focus visible. `aria-live="polite"` on updating values. Album art carries `alt`.
-- The window, glass weather, and color wash are `aria-hidden` decoration.
+- The window, glass weather, the prism strip and the lean are `aria-hidden` decoration.
 - Reduced-motion keeps correct color and disables animation.
 - Semantic landmarks and heading order preserved; the page works without JS and without WebGL.

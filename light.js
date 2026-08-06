@@ -41,6 +41,28 @@ export function scale3(c, k) { return [c[0] * k, c[1] * k, c[2] * k]; }
    Not relLum() — that one is the WCAG definition and is for contrast only. */
 export function luma(c) { return c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114; }
 
+/* Hue angle in degrees, for laying the sleeve's colours across the strip.
+   Achromatic colours return 0 rather than NaN — a grey has no hue to sort by
+   and any stable answer will do. */
+function hueOf(c) {
+  var mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]), d = mx - mn;
+  if (d < 1e-6) return 0;
+  var h;
+  if (mx === c[0]) h = ((c[1] - c[2]) / d + 6) % 6;
+  else if (mx === c[1]) h = (c[2] - c[0]) / d + 2;
+  else h = (c[0] - c[1]) / d + 4;
+  return h * 60;
+}
+
+/* Real dispersion is ordered by wavelength. The strip cannot borrow a
+   spectrum's colours — those come from the record — but it can borrow its
+   ordering, so the palette is laid warm edge to cool edge. A sleeve that is
+   three shades of rust still orders sensibly and still reads as rust, which
+   is the correct answer for that record. */
+export function orderByHue(colors) {
+  return colors.slice().sort(function (a, b) { return hueOf(a) - hueOf(b); });
+}
+
 function ch255(v) { return Math.round(clamp01(v) * 255); }
 export function rgb255(c) {
   return "rgb(" + ch255(c[0]) + "," + ch255(c[1]) + "," + ch255(c[2]) + ")";
@@ -151,48 +173,48 @@ var BAND_LIGHT = 0.62;
    are shared: room.js interpolates WASH into the shader and
    scripts/check-contrast.mjs replays the same maths to prove the composite
    still clears WCAG against every room the shader can produce. One definition,
-   or the proof drifts away from the render. */
-export var BAND_ALPHA = 0.84;
+   or the proof drifts away from the render.
 
+   0.84 -> 0.78: more of the room shows through the page. This is the cheapest
+   0.06 available — the derived text tokens absorb it entirely and the worst
+   composite holds at 4.60:1, exactly where it was. It does not stay cheap.
+   0.76 costs 0.03 of contrast, and by 0.74 the sweep fails in sixteen places.
+   The floor is 4.5 and it is not negotiable, so this is close to the end of
+   the budget rather than a step along it. */
+export var BAND_ALPHA = 0.78;
+
+/* The record's standing presence in the room: a flat lean of the walls toward
+   the sleeve's hue. Motionless, and weak enough that it is felt rather than
+   seen — the strip is what the record actually looks like.
+
+   This used to be six constants driving a noise field with a daylight gain
+   bolted on, because a volumetric tint calibrated to read after dark was
+   invisible at noon. There is no longer a volumetric tint, so the whole
+   compensating apparatus went with it. */
 export var WASH = {
-  poolMin: 0.18,     // the record always colours the room a little
-  temper: 0.72,      // how far toward the sleeve's own hue the multiplier goes
-  tint: 0.68,        // strength of the hue shift
-  add: 0.15,         // additive glow, mostly for after dark
-  /* Daylight is simply more light than a record sleeve. A tint calibrated to
-     read after dark all but vanishes at noon — the sun was not negating the
-     wash so much as out-voting it. The wash is given back what the sun takes
-     instead of being made loud at night so it survives the day. */
-  dayGain: 1.85,
-  /* The tint is a mix toward a tinted copy of the room; past 1.0 it would
-     overshoot the sleeve's hue, so 1.0 is the natural stop rather than a
-     tuned one. With the gain applied the product reaches it wherever the
-     noise pools, which is the intended ceiling and not a clipped one. */
-  tintMax: 1.0
+  temper: 0.72,   // how far toward the sleeve's own hue the multiplier goes
+  lean: 0.12      // and how much of that lands
 };
 
-/* How hard the record pushes, given how much light it is pushing against.
-   Keyed on the room's own luminance rather than on the altitude directly:
-   brightness is the thing the sleeve is losing to, so compensating against
-   anything else leaves a band of the morning where the room has already
-   brightened and the wash has not yet been given anything back. */
-export function washGain(alt) {
-  var floor = luma(LIGHT[0].room), ceil = luma(LIGHT[LIGHT.length - 1].room);
-  var k = clamp01((luma(lightAt(alt).room) - floor) / (ceil - floor));
-  return 1 + (WASH.dayGain - 1) * k;
-}
-
-/* The room as the shader leaves it once a sleeve has washed it. Mirrors the
-   GLSL exactly; both read WASH. Note that `gain` multiplies the tint and not
-   the glow — see the shader for why that separation exists. */
-export function washRoom(room, sleeve, washI, pool, gain) {
-  var wl = Math.max(luma(sleeve), 0.05);
+/* The room as the shader leaves it once a sleeve has leaned on it. Mirrors the
+   GLSL exactly; both read WASH. The sleeve is normalised to unit luminance
+   first — multiplying the room by a raw sleeve colour just darkens it, and a
+   navy cover turned the room muddy instead of blue. Dividing out the colour's
+   own brightness leaves hue and saturation, so the room shifts colour while
+   holding its light. */
+export function washRoom(room, sleeve, washI) {
+  /* A true epsilon, not a brightness floor. This used to clamp at 0.05, which
+     silently made dark sleeves dim the room instead of colouring it — a navy
+     cover at luma 0.027 was divided by 0.05, so its ratios came out flattened
+     toward 1 and the tint it should have thrown went missing. The [0.38, 1.75]
+     clamp below already bounds the near-black case this was guarding, so the
+     floor was redundant as well as wrong. Guard only against division by zero. */
+  var wl = Math.max(luma(sleeve), 1e-4);
+  var k = clamp01(washI == null ? 1 : washI) * WASH.lean;
   var out = [];
-  var k = Math.min(pool * washI * (gain == null ? 1 : gain) * WASH.tint, WASH.tintMax);
   for (var i = 0; i < 3; i++) {
-    var w = 1 + (sleeve[i] / wl - 1) * WASH.temper;
-    w = Math.max(0.38, Math.min(1.75, w));
-    out.push(room[i] * (1 - k) + room[i] * w * k + sleeve[i] * pool * washI * WASH.add);
+    var w = Math.max(0.38, Math.min(1.75, 1 + (sleeve[i] / wl - 1) * WASH.temper));
+    out.push(room[i] * (1 - k) + room[i] * w * k);
   }
   return out;
 }
@@ -209,6 +231,143 @@ export function bandOver(band, room) { return mix3(room, band, BAND_ALPHA); }
    change to the shader rather than quietly expiring with it. */
 export function bandGrounds(band, room) {
   return [bandOver(band, room), bandOver(band, [0, 0, 0]), bandOver(band, [1, 1, 1])];
+}
+
+/* ---------- the prism ----------
+   The record reaches the room as a strip of split light rather than as weather
+   in the air. Something with a bevelled edge sits in the room's light; the
+   record is what that light breaks into.
+
+   Nothing here varies with time. That is the point rather than an economy: a
+   bright band on a wall is furniture, a moving field is weather, and the eye
+   tracks weather. The previous wash drifted on the wind and was impossible to
+   stop reading.
+
+   The colours are the sleeve's own, laid across the strip's width by
+   orderByHue(). What reads as refraction is separation — light that arrived as
+   one thing landing as three, side by side — not a manufactured spectrum. */
+export var STRIP = {
+  W: 0.028,          // half-width, aspect-corrected units
+  L: 0.30,           // half-length
+  /* How far from the caster the strip lands — below the window, above the
+     lamp. The throw was downward from both at first, which is right for a
+     window high on the wall and wrong for a lamp at y=0.17: it put the lamp's
+     strip below the floor and off the bottom of the viewport. The sweep could
+     not catch it, because stripI() models intensity and not geometry — it
+     reported the lamp casting happily after dark while the shader drew
+     nothing. Light thrown from below lands above. */
+  THROW: 0.42,
+  ANG: 0.62,         // radians of sweep either side of centre
+  /* The strip's centre never slides left of this. Between about 05:00 and
+     11:00 the window sits at uv.x 0.21–0.32 — behind the plate — and so does
+     everything it casts, which left the record with nothing but the lean for
+     seven hours of every day. So the cast is biased: placed, for those hours,
+     rather than purely thrown. That is a real cost and worth naming, because
+     everything else in this room is a consequence of where the light is. The
+     strip keeps its angle, its length and its rise; only its horizontal
+     footing is held. Past noon the geometry clears the plate on its own and
+     this stops applying — max(), so nothing jumps when it does. */
+  CLEAR: 0.52,
+  /* How much the strip answers the pointer, against the room's own parallax.
+     It is applied after CLEAR, not before — folded in earlier it went through
+     the max() and the strip lost all sideways movement for the seven hours the
+     clamp is active, leaving only the vertical component. It reacted, so it
+     looked deliberate, which is the worst kind of wrong.
+
+     Wider in x than in y because that is the axis the strip is thin on: at
+     x3.2 the slide is about three times the strip's own half-width and reads
+     as the light shifting, while the same gain in y would just bob it. */
+  PAR_X: 3.2,
+  PAR_Y: 1.0,
+  GAIN: 0.22,        // additive strength at full intensity
+  LAMP_W: 0.55,      // the lamp's weight as a caster, against the sun's
+  NODE_FLOOR: 0.72,  // caustic nodes: the strip is not evenly lit along its length
+  NODE_VAR: 0.55,
+  NODE_FREQ: 13.0,
+  /* How much of its own darkness a sleeve is allowed to keep.
+     The strip divides the sleeve colour by its luminance, which at NORM = 1 is
+     full normalisation: every record throws exactly as much light as every
+     other, and a dark near-neutral cover — normalised to luma 1 — lands on the
+     wall as pale grey. That reads as no relation to the sleeve at all, which
+     is the one thing the strip exists to be.
+
+     At NORM < 1 the divisor is L^NORM, so the strip's own luminance comes out
+     as L^(1-NORM) and a dark record throws a dark strip. 0.55 leaves roughly a
+     2.7x spread between a very dark sleeve and a mid one, which is visible
+     without letting a black cover go out entirely.
+
+     Not 0: that is the raw sleeve colour, and it was rejected for the lean for
+     a reason recorded in washRoom() — a dark cover then dims the room instead
+     of colouring it. This keeps most of that protection while giving the
+     darkness back. */
+  NORM: 0.55,
+  /* How much of the sleeve colour's shared neutral is taken out before it is
+     thrown. NORM fixed the brightness and left the real fault: a dark, cool
+     cover adds light that *desaturates* the warm wall it lands on, so the band
+     came out paler than the room around it — a dark navy sleeve drove the
+     band's saturation to 0.06 against a wall at 0.36. Grey, and brighter than
+     its surroundings, which is the pale band this was reported as.
+
+     Subtracting min(r,g,b) leaves only what actually carries hue. That is not
+     a manufactured colour: it is the sleeve's own hue at higher purity, and it
+     is what a prism does — it receives light and returns something more
+     saturated than it got. A genuinely grey cover still comes back grey, since
+     it has no chromatic remainder to keep, and dims rather than greying the
+     wall. signals.js refuses those upstream anyway.
+
+     Not 1.0: taking all of it makes a near-neutral sleeve land as a pure hue
+     the cover does not visibly contain, which crosses from separating the
+     record's colour into inventing it. */
+  PURITY: 0.7,
+  /* Unit luminance is not unit channels — a saturated red normalised to
+     luma 1 reaches 3.34 in red, which would put the peak addition near 1.0
+     and blow the wall out. The wash's own clamp exists for the same reason.
+     Still a hard min(), so it bounds the result at every NORM and stripPeak()
+     stays a true ceiling. */
+  CH_MAX: 2.2
+};
+
+/* The worst the strip can add to one channel: a fully saturated sleeve colour
+   at a caustic node, at full intensity. check-contrast.mjs holds this to a
+   ceiling, which is what makes "the strip cannot break the room" a checked
+   claim rather than an asserted one. */
+export function stripPeak() {
+  return STRIP.GAIN * (STRIP.NODE_FLOOR + STRIP.NODE_VAR) * STRIP.CH_MAX;
+}
+
+/* The colour one stop of the strip throws, before intensity and gain. Mirrors
+   the GLSL exactly; both read STRIP.NORM and STRIP.CH_MAX.
+
+   This exists so "a darker record throws a darker strip" is a checked claim.
+   It was not one before, and could not have been: at NORM = 1 the maths was a
+   normalisation with nothing to check, and what shipped was a pale grey band
+   under every dark sleeve on the page. */
+export function stripColor(sleeve) {
+  /* PURITY picks the hue, NORM picks the brightness, and the two are kept
+     apart on purpose. They were folded together at first — brightness taken
+     from what survived the purity subtraction — which quietly punished
+     neutrals twice: a white sleeve has almost nothing left after its own grey
+     is removed, so it came out at 0.58 of the light it should throw. The
+     direction is what purity is for; the sleeve's own luminance is what sets
+     how much of it arrives. */
+  var mn = Math.min(sleeve[0], sleeve[1], sleeve[2]) * STRIP.PURITY;
+  var c = [sleeve[0] - mn, sleeve[1] - mn, sleeve[2] - mn];
+  var cl = Math.max(luma(c), 1e-4);
+  var target = Math.pow(Math.max(luma(sleeve), 1e-4), 1 - STRIP.NORM);
+  var out = [];
+  for (var i = 0; i < 3; i++) out.push(Math.min(c[i] / cl * target, STRIP.CH_MAX));
+  return out;
+}
+
+/* How hard the strip is thrown, given the light there is to refract and how
+   much of the room is still visible. Mirrors the shader's dominance maths.
+
+   Excludes the record's own washI: that is whether there is a record at all,
+   which is the caller's business, not the light model's. */
+export function stripI(alt, cloud, cover) {
+  var sun = windowI(alt) * (1 - clamp01(cloud || 0));
+  var lamp = tungstenI(alt) * STRIP.LAMP_W;
+  return Math.max(sun, lamp) * (1 - clamp01(cover || 0));
 }
 
 /* legible(), but the text has to clear `target` on every ground it can land

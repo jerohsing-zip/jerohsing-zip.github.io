@@ -147,9 +147,9 @@ export function regimeOf(altitude) {
    Spotify's CDN sends Access-Control-Allow-Origin: *, so a canvas read is
    untainted and no proxy is needed. Verified against i.scdn.co.
 
-   Returns null rather than a bad answer: a sleeve with no usable color
-   (near-monochrome, or all black/white) must leave the room's true light
-   alone instead of washing it gray. */
+   Returns null only when there is genuinely nothing to read — no url, a
+   failed load, no pixels. A monochrome sleeve is an answer, not a failure:
+   the room renders it as the light it actually is. */
 var SIZE = 32;          // 1024 samples is plenty for dominant color
 var BITS = 2;           // 4 levels per channel → 64 bins, stable at this sample count
 
@@ -178,7 +178,24 @@ export function albumPalette(url) {
       for (var i = 0; i < data.length; i += 4) {
         var r = data[i], g = data[i + 1], b = data[i + 2];
         var v = Math.max(r, g, b);
-        if (v < 24 || (r > 238 && g > 238 && b > 238)) continue;   // ignore black and paper-white
+        /* Near-black is skipped: it carries no hue and is usually a border or
+           a shadow rather than the record's colour.
+
+           Paper-white used to be skipped alongside it, for the same reason and
+           with the same stale justification as the chroma gate below it — a
+           white pixel is a no-op for a multiplicative tint. Against an additive
+           strip it is the most meaningful pixel on the sleeve, and skipping it
+           was the larger of the two faults that made white covers vanish: a
+           pure white cover left zero bins and resolved null, while a white
+           cover with black type left only the anti-aliased grey edges and threw
+           a dim grey band. A cover that is mostly white is a white cover.
+
+           Removing it costs less than it looks. The score below already weights
+           by chroma, so a real colour still outranks white until white is about
+           3.7x its area; a photographic or coloured sleeve returns exactly the
+           same palette as before. What changes is the sleeve that is genuinely
+           mostly white, which is the case this is for. */
+        if (v < 24) continue;
         var k = ((r >> (8 - BITS)) << (BITS * 2)) | ((g >> (8 - BITS)) << BITS) | (b >> (8 - BITS));
         var bin = bins[k] || (bins[k] = { r: 0, g: 0, b: 0, n: 0 });
         bin.r += r; bin.g += g; bin.b += b; bin.n++;
@@ -198,14 +215,22 @@ export function albumPalette(url) {
       out.sort(function (a, b) { return b.score - a.score; });
       var top = out.slice(0, 3);
 
-      /* Only genuinely achromatic sleeves are refused, and only because they
-         are a no-op: the room normalises the wash to unit luminance before
-         tinting, so a grey returns a multiplier of 1 and changes nothing. The
-         strength of the tint already scales with the cover's own saturation,
-         which is why a hard chroma gate here was throwing away most
-         photographic covers for no reason. */
-      if (top[0].chroma < 0.05) { resolve(null); return; }
+      /* Every sleeve is returned, including the achromatic ones.
 
+         There was a chroma gate here, refusing anything under 0.05 on the
+         grounds that a grey was a no-op — true when the record reached the
+         room only as a multiplicative tint, since a grey normalises to a
+         multiplier of 1 and moves nothing. The prism strip is additive, and a
+         white record throws real white light, so the gate stopped describing
+         the render and started deleting from it: a largely white cover scores
+         chroma ~0.03, resolved null, and took the strip *and* the lean to zero.
+         The record vanished from the room entirely.
+
+         Nothing needs refusing in its place. A grey sleeve still no-ops the
+         lean by construction, which check-contrast.mjs proves directly rather
+         than relying on a guard up here; and the strip scales with the cover's
+         own luminance, so a black sleeve throws almost nothing without anyone
+         having to decide that it should. */
       resolve(top.map(function (x) { return x.c; }));
     };
     img.src = url;

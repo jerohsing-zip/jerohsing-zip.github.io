@@ -3,8 +3,8 @@
    tokens, then checks the fixed paper surfaces.
    Run: node scripts/check-contrast.mjs */
 import {
-  tokensFor, contrast, relLum, washRoom, washGain, bandGrounds,
-  LIGHT, BAND_ALPHA, WASH
+  tokensFor, contrast, relLum, washRoom, bandGrounds, orderByHue, luma,
+  stripI, stripPeak, stripColor, LIGHT, BAND_ALPHA, STRIP
 } from "../light.js";
 
 const BODY = 4.5;      // WCAG AA, normal text
@@ -88,73 +88,251 @@ for (const [name, fg, bg, min] of pairs) {
   if (c < min) bad(`${name} = ${c.toFixed(2)}:1, needs ${min}`);
 }
 
-/* ---- the album wash must not be able to break the room ----
-   The wash now carries a daylight gain — a tint calibrated for the night is
-   invisible at noon — so the sleeve pushes hardest exactly when the room is
-   brightest. washRoom() mirrors the shader's maths, and the sleeves below are
-   the corners of the colour cube: no real cover can push further than these.
+/* ---- the record's lean must not be able to break the room ----
+   The wash is no longer weather in the air; it is a flat, motionless lean of
+   the walls toward the sleeve's hue, with the strip carrying the record's
+   actual presence. So what has to hold here is narrower than it was: the lean
+   may not drive the room out of range, and it may not bleach it.
 
-   The band is derived from the unwashed room by design; the wash lands behind
-   the band, where bandGrounds() has already bounded it by black and white. So
-   what has to hold here is narrower and checkable: the wash may not drive the
-   room out of range, and it may not bleach the room to grey or to white. */
+   The band is derived from the unwashed room by design, and the lean lands
+   behind the band where bandGrounds() has already bounded it by black and
+   white — so text legibility is not at stake here, only the room's own health.
+
+   These sleeves are the corners of the colour cube: no real cover pushes
+   further. The achromatic corner is included because it must be a no-op, not
+   because a cover like it would ever reach here — signals.js refuses those at
+   chroma < 0.05. */
 const SLEEVES = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [0, 1, 1], [1, 0, 1], [1, 1, 1], [.04, .04, .04]];
 
+/* A complementary sleeve desaturates the wall, because that is what
+   complementary light does — the rose room at civil twilight under a green
+   cast goes nearly neutral, and it should. So the claim here is relative
+   rather than absolute: the lean may take colour out of the room, it may not
+   take most of it.
+
+   SAT_FLOOR stays where it belongs, on the unwashed room. That guards the
+   walls as a material, and a material's colour is not the light's to erase.
+   This bound guards how far the light may reach instead.
+
+   This is one-sided: it only catches a lean that reaches too far. A
+   washRoom() that ignored the sleeve entirely and returned the room
+   unchanged — or just dimmed it — would retain 1.0 and sail through. It is
+   the reach proof directly below that catches that failure, by requiring the
+   leaned room to differ from the unwashed one by at least LEAN_FLOOR. Only
+   the two together pin the lean down, to roughly 0.046 ≤ WASH.lean ≤ 0.13.
+
+   Worst observed retention at the shipped WASH.lean = 0.12 is 0.250 — a pure
+   green sleeve against the rose room at civil twilight, exact complements,
+   at a corner of the colour cube that no real cover reaches. The floor is
+   set below that with margin, and the corners are deliberately a harder test
+   than anything that can ship.
+
+   This bound is NOT monotone in WASH.lean — worst retention runs 0.12 → pass
+   (0.250), 0.14 → fail (0.113), 0.16 → fail (0.125), 0.20 → pass again
+   (0.234), 0.30 → fail (0.153). So a larger lean passing this check later is
+   not evidence it is safe; it can pass, fail, and pass again as the value
+   climbs. Anyone hand-tuning WASH.lean needs both proofs green at the new
+   value, not just this one, and should not trust a pass here in isolation. */
+const RETENTION_FLOOR = 0.20;
+let worstRet = Infinity, atRet = "";
+
 for (const alt of ALTS) for (const cloud of CLOUDS) {
-  const t = tokensFor(alt, cloud);
-  for (const sleeve of SLEEVES) for (const pool of [WASH.poolMin, 1]) {
-    const w = washRoom(t.room, sleeve, 1, pool, washGain(alt));
-    for (const v of w) if (!isFinite(v) || v < 0) bad(`washed room out of range at ${alt}°: ${w}`);
+  const room = tokensFor(alt, cloud).room;
+  const s0 = sat(room);
+  for (const sleeve of SLEEVES) {
+    const w = washRoom(room, sleeve, 1);
+    for (const v of w) if (!isFinite(v) || v < 0) bad(`leaned room out of range at ${alt}°: ${w}`);
+    if (s0 > 0) {
+      const ret = sat(w) / s0;
+      if (ret < worstRet) { worstRet = ret; atRet = `sleeve ${sleeve} at ${alt}° / cloud ${cloud}`; }
+    }
+  }
+}
+console.log(`lean saturation retention: worst ${worstRet.toFixed(3)} (${atRet}, floor ${RETENTION_FLOOR})`);
+if (worstRet < RETENTION_FLOOR) bad(`the lean bleached the room: retention ${worstRet.toFixed(3)} at ${atRet}`);
+
+/* The achromatic corner is a no-op by construction: a grey sleeve normalises
+   to a multiplier of 1, so it cannot move the room. Asserted rather than
+   asserted-in-a-comment — signals.js refuses these covers upstream, and a
+   claim nothing checks is how that upstream guard quietly becomes load-
+   bearing without anyone noticing. */
+for (const alt of ALTS) for (const cloud of CLOUDS) {
+  const room = tokensFor(alt, cloud).room;
+  for (const grey of [[.5, .5, .5], [.04, .04, .04], [1, 1, 1]]) {
+    const w = washRoom(room, grey, 1);
+    for (let i = 0; i < 3; i++) {
+      if (Math.abs(w[i] - room[i]) > 1e-9) {
+        bad(`a grey sleeve moved the room at ${alt}° / cloud ${cloud}: ${room} -> ${w}`);
+      }
+    }
   }
 }
 
-/* The record has to stay visible as the sun comes up — the complaint that
-   started this was that daylight simply negated the sleeve. Measured as
-   chromaticity, each channel over the room's own luminance, so it asks how
-   much *colour* the record throws rather than how bright the room got.
+/* The record is never entirely absent from the room. The strip comes and goes
+   with the light, the weather and the scroll — so the lean is what has to be
+   always-on, and "always" is checked at every hour under every sky.
 
-   Two claims, both about the compensation rather than about a colour. Reach
-   itself cannot be barred at a number: the room's hue swings hard through
-   sunrise — rose to orange in a few degrees — and a yellow sleeve against an
-   orange wall is quietly close to a no-op no matter how hard it pushes. That
-   is the room being honest, not the gain failing. */
+   This is the honest successor to the deleted daylight-gain proofs. Those
+   defended a mechanism; this defends the outcome that mechanism existed for.
+   Measured as chromaticity — each channel over the room's own luminance — so
+   it asks how much *colour* the record throws rather than how bright the room
+   got. The achromatic corner is excluded: a grey sleeve normalises to a
+   multiplier of 1 and is a no-op by construction, which is why signals.js
+   refuses those covers upstream rather than sending them here. */
 const chroma = (c) => { const l = Math.max(c[0] * .299 + c[1] * .587 + c[2] * .114, 1e-4); return c.map((v) => v / l); };
-/* Measured where the room actually spends its area. The wash's pool is a noise
-   field that averages near the middle of its range; at pool 1 the tint has
-   already hit WASH.tintMax and the gain has nothing left to give, so measuring
-   there would test the clamp rather than the compensation. */
-const POOL = WASH.poolMin + (1 - WASH.poolMin) * 0.5;
-const reach = (alt, sleeve, gain) => {
-  const room = tokensFor(alt, 0).room;
-  const a = chroma(room), b = chroma(washRoom(room, sleeve, 1, POOL, gain));
+const reach = (alt, cloud, sleeve) => {
+  const room = tokensFor(alt, cloud).room;
+  const a = chroma(room), b = chroma(washRoom(room, sleeve, 1));
   return Math.max(...a.map((v, i) => Math.abs(v - b[i])));
 };
 
-/* 1. Compensation never goes backwards as the room brightens. */
-let lastGain = -Infinity, lastAlt = null;
-for (const alt of ALTS) {
-  const g = washGain(alt);
-  if (g < lastGain - 1e-9) bad(`washGain falls from ${lastGain.toFixed(3)} at ${lastAlt}° to ${g.toFixed(3)} at ${alt}°`);
-  lastGain = g; lastAlt = alt;
-}
-
-/* 2. In real daylight the gain is materially there — the sleeve throws
-   meaningfully more colour than it would have. Below this margin the whole
-   mechanism is a rounding error and the sun has won again. */
-const MARGIN = 1.25;
-let worstLift = Infinity, atLift = "";
+const LEAN_FLOOR = 0.02;
+let worstReach = Infinity, atReach = "";
 for (const sleeve of SLEEVES.slice(0, 6)) {
-  for (const alt of ALTS.filter((a) => a >= 20)) {
-    const lift = reach(alt, sleeve, washGain(alt)) / reach(alt, sleeve, 1);
-    if (lift < worstLift) { worstLift = lift; atLift = `sleeve ${sleeve} at ${alt}°`; }
+  for (const alt of ALTS) for (const cloud of CLOUDS) {
+    const r = reach(alt, cloud, sleeve);
+    if (r < worstReach) { worstReach = r; atReach = `sleeve ${sleeve} at ${alt}° / cloud ${cloud}`; }
   }
 }
-console.log(`wash gain: ${washGain(-6).toFixed(2)}× at night, ${washGain(60).toFixed(2)}× at high sun`);
-console.log(`daylight wash lift: worst ${worstLift.toFixed(2)}× (${atLift})`);
-if (worstLift < MARGIN) bad(`the sun still out-votes the record: only ${worstLift.toFixed(2)}× lift at ${atLift}`);
+console.log(`lean reach: worst ${worstReach.toFixed(3)} (${atReach}, floor ${LEAN_FLOOR})`);
+if (worstReach < LEAN_FLOOR) bad(`the room stops knowing what is playing: reach ${worstReach.toFixed(3)} at ${atReach}`);
 
 const t0 = tokensFor(0, 0);
 if (relLum(t0.band) > 1 || relLum(t0.band) < 0) bad("band luminance out of range");
+
+/* ---- the strip's colours are the sleeve's ----
+   orderByHue lays the three palette colours across the strip's width. It may
+   reorder them; it may not invent, drop or duplicate one. A rainbow that
+   contains a colour the cover does not is the exact failure this design was
+   drawn to avoid, so the permutation property is checked rather than assumed. */
+const PALETTES = [
+  [[0.9, 0.1, 0.1], [0.1, 0.2, 0.8], [0.2, 0.7, 0.2]],
+  [[0.6, 0.4, 0.2], [0.7, 0.5, 0.3], [0.5, 0.3, 0.15]],   // three shades of rust
+  [[0.5, 0.5, 0.5], [0.9, 0.9, 0.2], [0.1, 0.1, 0.1]]
+];
+const keyOf = (c) => c.map((v) => v.toFixed(6)).join(",");
+for (const p of PALETTES) {
+  const before = p.map(keyOf).sort();
+  const after = orderByHue(p).map(keyOf).sort();
+  if (before.join("|") !== after.join("|")) {
+    bad(`orderByHue is not a permutation of ${JSON.stringify(p)}`);
+  }
+  if (orderByHue(p).length !== 3) bad(`orderByHue returned ${orderByHue(p).length} colours, needs 3`);
+  const copy = JSON.parse(JSON.stringify(p));
+  orderByHue(p);
+  if (JSON.stringify(p) !== JSON.stringify(copy)) bad("orderByHue mutated its argument");
+}
+/* Warm edge to cool edge: a red/green/blue palette must come back red-first. */
+const rgb = orderByHue([[0.1, 0.2, 0.8], [0.2, 0.7, 0.2], [0.9, 0.1, 0.1]]);
+if (keyOf(rgb[0]) !== keyOf([0.9, 0.1, 0.1])) bad("orderByHue did not put the warmest colour first");
+console.log("orderByHue: permutation and warm-first hold");
+
+/* ---- a darker record throws a darker strip ----
+   The strip used to divide the sleeve colour by its full luminance, so every
+   record threw exactly as much light as every other and a dark near-neutral
+   cover landed on the wall as pale grey — a band with no visible relation to
+   the sleeve it came from, which is the one thing the strip exists to be.
+
+   STRIP.NORM is the exponent that gives the darkness back, and the property
+   worth holding is not its value but its consequence: the strip's brightness
+   must rise with the sleeve's. Checked as a strict ordering down a ramp rather
+   than at two points, because a floor, a clamp or a stray max() anywhere in
+   this maths would flatten part of the range while leaving the endpoints
+   looking correct — which is exactly how the pale grey survived review. */
+const stripLum = (c) => luma(stripColor(c));
+for (const hue of [[1, .28, .1], [.2, .45, 1], [.35, 1, .4], [1, 1, 1], [.6, .55, .5]]) {
+  let prev = -1, prevAt = 0;
+  for (let k = 0.04; k <= 1.0001; k += 0.04) {
+    const l = stripLum(hue.map((v) => v * k));
+    if (!isFinite(l) || l <= 0) bad(`stripColor is not positive for ${hue} at ${k.toFixed(2)}: ${l}`);
+    if (l <= prev) {
+      bad(`a darker sleeve threw as much light: ${hue} at ${prevAt.toFixed(2)} -> ${k.toFixed(2)} gave ${prev.toFixed(3)} -> ${l.toFixed(3)}`);
+    }
+    prev = l; prevAt = k;
+  }
+}
+/* The spread is the point. If a very dark sleeve and a mid one land within a
+   whisker of each other the maths is monotonic and still useless. */
+const DARK = [.10, .09, .12], MID = [.52, .48, .55];
+const spread = stripLum(MID) / stripLum(DARK);
+console.log(`strip darkness spread: mid sleeve throws ${spread.toFixed(2)}x a dark one (floor 1.6)`);
+if (spread < 1.6) bad(`a dark record throws nearly as much light as a mid one: ${spread.toFixed(2)}x`);
+/* The strip returns the sleeve's hue purer than it received it — that is what
+   STRIP.PURITY is for, and without it a dark cool cover desaturated the warm
+   wall it landed on and read as pale grey. */
+const satOf = (c) => { const mx = Math.max(...c), mn = Math.min(...c); return mx ? (mx - mn) / mx : 0; };
+for (const c of [[.09, .08, .13], [.06, .09, .22], [.20, .05, .07], [.93, .48, .14], [.35, .40, .33]]) {
+  if (satOf(stripColor(c)) < satOf(c) - 1e-9) {
+    bad(`the strip returned ${c} less saturated than the sleeve: ${satOf(stripColor(c)).toFixed(3)} < ${satOf(c).toFixed(3)}`);
+  }
+}
+/* But it may not invent one. A grey cover has no hue to purify and must come
+   back grey — the check that keeps PURITY on the separating side of the line
+   between separating the record's colour and manufacturing it.
+
+   These covers now reach the room. signals.js used to refuse anything under
+   chroma 0.05, on the grounds that a grey was a no-op for a multiplicative
+   tint; against an additive strip that gate deleted a real render, and a
+   largely white sleeve took the strip and the lean to zero together. */
+for (const g of [[.15, .15, .15], [.5, .5, .5], [.03, .03, .03]]) {
+  const s = stripColor(g);
+  if (satOf(s) > 1e-6) bad(`a grey sleeve ${g} came back with hue: ${s.map((v) => v.toFixed(3))}`);
+}
+console.log(`strip purity: hue kept and never invented (grey stays grey at PURITY ${STRIP.PURITY})`);
+
+/* A white record throws white light, and a lot of it. This is the case that
+   went missing: the strip disappeared entirely under a largely white cover,
+   and the cause was two independent faults that each look like the other.
+   signals.js refused the sleeve upstream, so nothing arrived at all; and the
+   purity subtraction took its brightness from what was left after the grey
+   came out, which for a neutral is almost nothing. Either one alone still
+   leaves a white record barely visible, so both are checked. */
+const WHITE_FLOOR = 0.75;
+for (const w of [[1, 1, 1], [.94, .93, .91], [.88, .88, .90]]) {
+  const l = stripLum(w);
+  if (l < WHITE_FLOOR) bad(`a white sleeve ${w} threw only ${l.toFixed(3)} — needs ${WHITE_FLOOR}`);
+}
+console.log(`white sleeve throws ${stripLum([1, 1, 1]).toFixed(2)} (floor ${WHITE_FLOOR}), black throws ${stripLum([.02, .02, .02]).toFixed(3)}`);
+/* …and the darkness spread still has to hold across the neutral axis, which
+   is where the two faults were hiding. */
+if (!(stripLum([.95, .95, .95]) > stripLum([.5, .5, .5]) && stripLum([.5, .5, .5]) > stripLum([.08, .08, .08]))) {
+  bad("neutral sleeves do not order by brightness");
+}
+
+/* …and no sleeve may exceed the ceiling the peak bound is computed from. */
+for (const c of [[1, 0, 0], [0, 0, 1], [1, 1, 0], [.02, .02, .02], [1, 1, 1], [.9, .05, .4]]) {
+  for (const v of stripColor(c)) {
+    if (!isFinite(v) || v < 0) bad(`stripColor out of range for ${c}: ${stripColor(c)}`);
+    if (v > STRIP.CH_MAX + 1e-9) bad(`stripColor exceeded CH_MAX for ${c}: ${v.toFixed(3)}`);
+  }
+}
+
+/* ---- the strip may not blow the wall out ----
+   The strip is additive and its colour is divided by its own luminance, which
+   is not unit *channels*: a saturated red normalised that way reaches
+   1/0.299 in red. STRIP.CH_MAX is the ceiling that keeps the worst case —
+   a fully saturated sleeve colour at a caustic node, at full intensity —
+   inside a bound that can be stated as a number instead of hoped for. It is a
+   hard min(), so it bounds the result at every NORM. */
+const STRIP_CEILING = 0.65;
+const peak = stripPeak();
+console.log(`strip peak addition ${peak.toFixed(3)} (ceiling ${STRIP_CEILING})`);
+if (peak > STRIP_CEILING) bad(`strip peak addition ${peak.toFixed(3)} exceeds ${STRIP_CEILING}`);
+if (!(peak > 0)) bad("strip peak addition is not positive — the strip would never be visible");
+
+/* The strip is an event, not a constant: it needs a source, direct light, and
+   an uncovered room. Each of those must actually be able to switch it off. */
+if (stripI(60, 0, 1) > 1e-6) bad("a fully covered room still draws the strip");
+if (stripI(60, 1, 0) >= stripI(60, 0, 0)) bad("overcast does not dim the strip");
+if (stripI(-40, 0, 0) > stripI(60, 0, 0)) bad("the strip is stronger at midnight than at high sun");
+for (const alt of ALTS) for (const cloud of CLOUDS) {
+  const v = stripI(alt, cloud, 0);
+  if (!isFinite(v) || v < 0 || v > 1) bad(`stripI out of 0..1 at ${alt}° / cloud ${cloud}: ${v}`);
+}
+/* After dark the lamp takes over as the caster, so the strip never vanishes
+   entirely while a record is on — it moves and weakens. */
+if (!(stripI(-30, 0, 0) > 0)) bad("the lamp does not cast the strip after dark");
+console.log(`strip intensity: ${stripI(60, 0, 0).toFixed(2)} high sun, ${stripI(-30, 0, 0).toFixed(2)} night, ${stripI(60, 1, 0).toFixed(2)} overcast noon`);
 
 console.log(fail ? `\n${fail} FAILURE(S)` : "\nAll contrast checks passed.");
 process.exit(fail ? 1 : 0);

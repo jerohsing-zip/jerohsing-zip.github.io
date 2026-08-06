@@ -5,16 +5,20 @@
      · the window — position from true solar azimuth, intensity and
        colour from true solar altitude. Weather lands on its glass.
      · the tungsten desk lamp — rises as the sun goes down.
-     · the turntable wash — colour thrown by the record now playing.
+     · the prism — a still strip of split light, cast by whichever of
+       the other two is lighting the room, carrying the colours of the
+       record now playing. Plus a weak motionless lean in the walls,
+       which is what the record is while the strip is absent.
 
    Nothing here is drawn as an object. The window is light with a
    soft rectangular falloff, not a picture of a window; drawing the
-   frame would be the pastiche this world refuses.
+   frame would be the pastiche this world refuses. The prism is never
+   depicted either — only what it does to the light that reaches it.
 
    Returns null when WebGL is unavailable so the caller can fall
    back to the CSS gradient.
    ============================================================ */
-import { WASH } from "./light.js";
+import { WASH, STRIP, orderByHue } from "./light.js";
 
 var VERT =
   "attribute vec2 aPos; varying vec2 vUv;" +
@@ -34,8 +38,9 @@ var FRAG = [
   "uniform vec3 uLight;",            // colour arriving through the glass
   "uniform vec3 uRoom;",             // ambient wall, cloud already in it
   "uniform vec3 uWarm; uniform float uWarmI;",   // tungsten lamp
-  "uniform vec3 uWash; uniform vec3 uWash2; uniform float uWashI;",   // the record's colours
-  "uniform float uWashGain;",        // what the sun makes the record pay
+  "uniform vec3 uWash; uniform vec3 uWash2; uniform vec3 uWash3;",   // the sleeve, hue-ordered across the strip
+  "uniform vec3 uLean; uniform float uWashI;",   // the sleeve's dominant colour, and whether a record is on
+  "uniform float uCover;",           // how much of the room the page has scrolled over
   "uniform float uCloud, uWet, uFog, uHaze;",
   "uniform vec2 uWind;",
 
@@ -122,33 +127,102 @@ var FRAG = [
   "  float lamp = 1.0 / (1.0 + ld*ld*2.4);",
   "  col += uWarm * lamp * uWarmI * 0.30;",
 
-  // ---- the record's colour, drifting on the wind
-  "  vec2 q = vec2((uv.x-0.5)*asp, uv.y-0.5)*1.15 + par*0.6;",
-  "  vec2 warp = vec2(fbm(q + vec2(0.0, t)), fbm(q + vec2(4.3, -t*0.9)));",
-  "  float field = fbm(q*0.90 + warp*1.2 + uWind*t*1.4);",
-  /* A floor under the pool so the record always colours the whole room, with
-     the noise varying how strongly rather than whether. */
-  "  float pool = " + f(WASH.poolMin) + " + " + f(1 - WASH.poolMin) + "*smoothstep(0.24, 0.90, field);",
-  /* Two sleeve colours drift against each other so the wash has internal
-     movement instead of one flat cast. */
-  "  float blend = smoothstep(0.26, 0.80, fbm(q*1.55 - warp*0.7 + vec2(t*1.2, -t*0.7)));",
-  "  vec3 washCol = mix(uWash, uWash2, blend);",
-  /* Normalised to unit luminance before tinting. Multiplying the room by a raw
+  /* ---- the record, as a lean in the walls.
+     Normalised to unit luminance before tinting. Multiplying the room by a raw
      sleeve colour just darkens it — a navy cover turned the room muddy instead
      of blue. Dividing out the colour's own brightness leaves hue and satura-
-     tion, so the room shifts colour while holding its light. */
-  "  float wl = max(luma(washCol), 0.05);",
-  "  vec3 w = clamp(mix(vec3(1.0), washCol/wl, " + f(WASH.temper) + "), vec3(0.38), vec3(1.75));",
-  /* uWashGain is washGain(altitude): the sun is more light than a sleeve is,
-     and a tint set to read after dark is invisible at noon.
+     tion, so the room shifts colour while holding its light.
 
-     It lifts the tint and only the tint. The glow below is additive, and
-     additive light on an already-bright room is exactly what blows out —
-     gained, a saturated sleeve at midday turned the walls into white swirls
-     instead of colouring them. The tint is a ratio and survives daylight
-     honestly; the glow is for after dark and stays there. */
-  "  col = mix(col, col * w, min(pool * uWashI * uWashGain * " + f(WASH.tint) + ", " + f(WASH.tintMax) + "));",
-  "  col += washCol * pool * uWashI * " + f(WASH.add) + ";",
+     The divisor guards against zero and nothing else. It clamped at 0.05 until
+     a sweep caught what that cost: a sleeve darker than luma 0.05 had its
+     ratios flattened toward 1, so dark covers dimmed the room instead of
+     colouring it — the exact opposite of the paragraph above. light.js carries
+     the full diagnosis. The clamp below already bounds the near-black case the
+     floor was guarding.
+
+     Flat and motionless on purpose. This is the record's standing presence,
+     felt rather than seen; the strip is what it actually looks like. What used
+     to be here was an fbm field drifting on the wind, and viewport-scale
+     colour moving behind text is impossible to stop reading. */
+  "  float ll = max(luma(uLean), 0.0001);",
+  "  vec3 lw = clamp(mix(vec3(1.0), uLean/ll, " + f(WASH.temper) + "), vec3(0.38), vec3(1.75));",
+  "  col = mix(col, col*lw, uWashI * " + f(WASH.lean) + ");",
+
+  /* ---- and as a strip of split light.
+     Something with a bevelled edge is sitting in the room's light. The record
+     is what that light breaks into: the three colours across the strip's width
+     are the sleeve's own, laid warm edge to cool edge by orderByHue(). What
+     reads as refraction is separation, not a manufactured spectrum.
+
+     There is no uTime term in here, and there must not be. A bright band on a
+     wall is furniture; a moving field is weather, and the eye cannot stop
+     reading weather. That is what the old wash got wrong. */
+  "  float sun = uWinI * (1.0 - uCloud);",
+  "  float lampw = uWarmI * " + f(STRIP.LAMP_W) + ";",
+  "  float stripI = uWashI * max(sun, lampw) * (1.0 - uCover);",
+  "  if (stripI > 0.002) {",
+  /* Cast by whichever source is actually lighting the room, so the handoff
+     from window to lamp happens on its own through dusk with nothing
+     scheduling it. */
+  "    float toLamp = lampw / (sun + lampw + 1e-4);",
+  "    vec2 src = mix(uWin, lp, toLamp);",
+  /* The cast angle rotates with the window's position, so the strip sweeps as
+     the sun crosses — a second clock, as the window already is. */
+  "    float ang = mix(" + f(-STRIP.ANG) + ", " + f(STRIP.ANG) + ", uWin.x);",
+  "    vec2 dir = vec2(cos(ang), sin(ang));",
+  "    vec2 nrm = vec2(-dir.y, dir.x);",
+  /* Thrown away from the caster: down from the window, up from the lamp. The
+     same toLamp that chose the source chooses the side, so the strip crosses
+     the wall as the room hands over at dusk rather than jumping. */
+  "    vec2 sc0 = src + nrm * mix(" + f(-STRIP.THROW) + ", " + f(STRIP.THROW) + ", toLamp);",
+  /* …held clear of the plate. A morning window is behind the plate and so is
+     what it casts; see STRIP.CLEAR for what this costs and why it is paid. */
+  "    sc0.x = max(sc0.x, " + f(STRIP.CLEAR) + ");",
+  /* The pointer moves it last, so the clamp above cannot flatten the sideways
+     component — and so the lamp gets parallax too, which it did not when this
+     rode on uWin and toLamp faded it to nothing after dark. */
+  "    sc0 += par * vec2(" + f(STRIP.PAR_X) + ", " + f(STRIP.PAR_Y) + ");",
+  "    vec2 sp = vec2((uv.x-sc0.x)*asp, uv.y-sc0.y);",
+  "    float across = dot(sp, nrm), along = dot(sp, dir);",
+  /* A flat-topped plateau, not a gaussian: a gaussian peaks at the centre,
+     which would leave the two edge colours dim and defeat the separation the
+     whole strip exists to show. */
+  "    float plateau = 1.0 - smoothstep(" + f(STRIP.W * 0.55) + ", " + f(STRIP.W) + ", abs(across));",
+  "    float taper = 1.0 - smoothstep(" + f(STRIP.L * 0.45) + ", " + f(STRIP.L) + ", abs(along));",
+  /* Caustic nodes — a real strip is not evenly lit along its length. Static:
+     the noise is read at a fixed position, never advanced. */
+  "    float nodes = " + f(STRIP.NODE_FLOOR) + " + " + f(STRIP.NODE_VAR) + "*noise(vec2(along*" + f(STRIP.NODE_FREQ) + ", 3.7));",
+  /* The spectral axis is the strip's width, not its length. Blends between
+     the stops are mixes of two cover colours, so nothing outside the sleeve's
+     own palette is ever drawn. */
+  "    float s = clamp(across/" + f(STRIP.W) + "*0.5 + 0.5, 0.0, 1.0);",
+  "    vec3 sc = s < 0.5 ? mix(uWash, uWash2, s*2.0) : mix(uWash2, uWash3, (s-0.5)*2.0);",
+  /* Divided by its own luminance raised to NORM, so a dark record throws a
+     dark strip. At NORM = 1 this was full normalisation and every sleeve threw
+     the same amount of light — a dark near-neutral cover arrived on the wall
+     as pale grey, which reads as nothing to do with the record. See
+     STRIP.NORM; light.js/stripColor() is the same maths, and the sweep holds
+     it to being monotonic in the sleeve's own brightness.
+
+     Then a per-channel ceiling, because normalising is not unit channels — a
+     saturated red reaches 3.34 in red and would blow the wall out. The divisor
+     guards against zero and nothing else; it clamped at 0.05 in an earlier
+     draft, which made dark sleeves dim the room instead of colouring it. */
+  /* Hue and brightness are set separately. PURITY takes the shared neutral out
+     to get the direction — without it a dark cool sleeve added light that
+     desaturated the warm wall and landed paler than the room around it — and
+     NORM sets how much arrives, from the sleeve's own luminance rather than
+     from whatever survived that subtraction. Folded together they punished
+     neutrals twice and a white record threw 0.58 of its light.
+
+     Then a per-channel ceiling: a saturated hue at unit luminance reaches 3.34
+     in one channel and would blow the wall out. light.js/stripColor() is this
+     same maths, and the sweep holds both properties. */
+  "    float tgtL = pow(max(luma(sc), 0.0001), " + f(1 - STRIP.NORM) + ");",
+  "    sc -= min(min(sc.r, sc.g), sc.b) * " + f(STRIP.PURITY) + ";",
+  "    sc = min(sc / max(luma(sc), 0.0001) * tgtL, vec3(" + f(STRIP.CH_MAX) + "));",
+  "    col += sc * plateau * taper * nodes * stripI * " + f(STRIP.GAIN) + ";",
+  "  }",
 
   /* ---- rain again, last: wet air takes the warmth back out of whatever the
      window, the lamp and the record have put in the room. */
@@ -195,7 +269,7 @@ export function createRoom(host) {
     res: u("uRes"), time: u("uTime"), mouse: u("uMouse"),
     win: u("uWin"), winI: u("uWinI"), light: u("uLight"), room: u("uRoom"),
     warm: u("uWarm"), warmI: u("uWarmI"), wash: u("uWash"), washI: u("uWashI"),
-    wash2: u("uWash2"), washGain: u("uWashGain"),
+    wash2: u("uWash2"), wash3: u("uWash3"), lean: u("uLean"), cover: u("uCover"),
     cloud: u("uCloud"), wet: u("uWet"), fog: u("uFog"), haze: u("uHaze"), wind: u("uWind")
   };
 
@@ -220,7 +294,8 @@ export function createRoom(host) {
      here ever snaps except the very first frame. */
   var cur = {
     win: [0.5, 0.6], winI: 0, light: [0, 0, 0], room: [0, 0, 0],
-    warm: [0, 0, 0], warmI: 0, wash: [0, 0, 0], wash2: [0, 0, 0], washI: 0, washGain: 1,
+    warm: [0, 0, 0], warmI: 0, wash: [0, 0, 0], wash2: [0, 0, 0], wash3: [0, 0, 0],
+    lean: [0, 0, 0], washI: 0, cover: 0,
     cloud: 0, wet: 0, fog: 0, haze: 0, wind: [0, 0]
   };
   var tgt = JSON.parse(JSON.stringify(cur));
@@ -232,7 +307,6 @@ export function createRoom(host) {
     if (s.warm) tgt.warm = s.warm.slice();
     if (typeof s.winI === "number") tgt.winI = s.winI;
     if (typeof s.warmI === "number") tgt.warmI = s.warmI;
-    if (typeof s.washGain === "number") tgt.washGain = s.washGain;
     if (immediate) cur = JSON.parse(JSON.stringify(tgt));
   }
   function setWeather(w) {
@@ -240,13 +314,25 @@ export function createRoom(host) {
     tgt.fog = w.fog || 0; tgt.haze = w.haze || 0;
     if (w.wind) tgt.wind = w.wind.slice();
   }
-  /* null → no usable colour in the sleeve; decay back to the room's own light. */
+  /* null → no usable colour in the sleeve; decay back to the room's own light.
+
+     Two orderings, because they answer different questions. The lean wants the
+     cover's *dominant* colour, which is the order albumPalette returns. The
+     strip wants them laid warm edge to cool edge, which is orderByHue's. */
   function setWash(colors, amount) {
     if (!colors || !colors.length) { tgt.washI = 0; return; }
-    tgt.wash = colors[0].slice();
-    tgt.wash2 = (colors[1] || colors[0]).slice();
+    var o = orderByHue(colors);
+    tgt.lean = colors[0].slice();
+    tgt.wash = o[0].slice();
+    tgt.wash2 = (o[1] || o[0]).slice();
+    tgt.wash3 = (o[2] || o[1] || o[0]).slice();
     tgt.washI = typeof amount === "number" ? amount : 1;
   }
+
+  /* How much of the room the page has scrolled over. The strip fades out under
+     the content bands rather than ghosting through them at BAND_ALPHA and
+     being cut by a band edge — which is what made the old wash read as glass. */
+  function setCover(v) { tgt.cover = v < 0 ? 0 : v > 1 ? 1 : v; }
 
   var mx = 0.5, my = 0.5, tmx = 0.5, tmy = 0.5;
   window.addEventListener("pointermove", function (e) {
@@ -266,10 +352,12 @@ export function createRoom(host) {
     ease3(cur.light, tgt.light, 0.035); ease3(cur.room, tgt.room, 0.035);
     ease3(cur.warm, tgt.warm, 0.035);
     ease3(cur.wash, tgt.wash, 0.03); ease3(cur.wash2, tgt.wash2, 0.03);
+    ease3(cur.wash3, tgt.wash3, 0.03); ease3(cur.lean, tgt.lean, 0.03);
     cur.winI = ease(cur.winI, tgt.winI, 0.035);
     cur.warmI = ease(cur.warmI, tgt.warmI, 0.035);
     cur.washI = ease(cur.washI, tgt.washI, 0.035);     // the record fades in and out slowly
-    cur.washGain = ease(cur.washGain, tgt.washGain, 0.035);
+    /* Faster than the sun eases, because this one tracks the scrollbar. */
+    cur.cover = ease(cur.cover, tgt.cover, 0.15);
     cur.cloud = ease(cur.cloud, tgt.cloud, 0.03);
     cur.wet = ease(cur.wet, tgt.wet, 0.03);
     cur.fog = ease(cur.fog, tgt.fog, 0.03);
@@ -289,7 +377,9 @@ export function createRoom(host) {
     gl.uniform3fv(U.wash, cur.wash);
     gl.uniform3fv(U.wash2, cur.wash2);
     gl.uniform1f(U.washI, cur.washI);
-    gl.uniform1f(U.washGain, cur.washGain);
+    gl.uniform3fv(U.wash3, cur.wash3);
+    gl.uniform3fv(U.lean, cur.lean);
+    gl.uniform1f(U.cover, cur.cover);
     gl.uniform1f(U.cloud, cur.cloud);
     gl.uniform1f(U.wet, cur.wet);
     gl.uniform1f(U.fog, cur.fog);
@@ -303,5 +393,5 @@ export function createRoom(host) {
   }
   requestAnimationFrame(frame);
 
-  return { setLight: setLight, setWeather: setWeather, setWash: setWash, canvas: canvas };
+  return { setLight: setLight, setWeather: setWeather, setWash: setWash, setCover: setCover, canvas: canvas };
 }
