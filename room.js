@@ -117,7 +117,19 @@ var FRAG = [
      as tear it into lobes, and 0.22 put the noise field itself on every wall in
      the room. Rain is supposed to stop the light being still, not become
      something you can point at. */
-  "    vec2 rq = vec2(dp.x*3.2, dp.y*1.15 - uTime*0.09) + uWind*t*2.0;",
+  /* Direction, speed and grain all say what phenomenon this is, and all three
+     used to say fog. Subtracting time from the sampled y holds a feature's value
+     at increasing dp.y, so the field climbed; at 0.09/1.15 it took thirteen
+     seconds to cross the room; and x*3.2 against y*1.15 made the lowest octave —
+     the one you actually see — cells nearly three times taller than wide. Tall
+     cells drifting slowly upward is how you would build a plume of steam on
+     purpose.
+
+     So: +uTime falls, 0.56/2.4 crosses in a bit over four seconds, and the
+     multipliers swap sense so cells run half again wider than tall. Water
+     crossing a window arrives in sheets, and a sheet is wide. The amplitudes
+     below are untouched — they were never what was wrong. */
+  "    vec2 rq = vec2(dp.x*1.6, dp.y*2.4 + uTime*0.56) + uWind*t*2.0;",
   "    run = (fbm(rq*3.6) - 0.5) * uWet;",
   "    thrown *= 1.0 + run*0.32;",
   "  }",
@@ -130,7 +142,10 @@ var FRAG = [
   "  if (pane > 0.002) {",
   "    float g = dot(col, vec3(0.333));",
   "    col = mix(col, mix(col, vec3(g), 0.55) + lightCol*0.05, uFog*pane*0.85);",
-  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(26.0, 5.0) + vec2(uWind.x*2.2, -1.0)*uTime*1.7;",
+  /* +1.0, not -1.0. Adding time to the sampled y walks a feature down the glass;
+     subtracting it walked them up, which is not what DESIGN.md means by "the
+     falling streaks" and not what rain does. */
+  "    vec2 rp = vec2(uv.x*asp, uv.y)*vec2(26.0, 5.0) + vec2(uWind.x*2.2, 1.0)*uTime*1.7;",
   /* 64x7 asked value noise for cells nine times taller than wide, and a value
      noise cell is a rectangle — so at that anisotropy the streaks *were* the
      cells, drawn as hard vertical bars across the glass. Wider and fewer. */
