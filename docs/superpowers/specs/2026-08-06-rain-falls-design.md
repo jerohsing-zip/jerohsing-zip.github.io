@@ -117,3 +117,104 @@ before judging.
 
 Success is three-part: the field falls, it reads as water rather than steam at
 `0.45`, and no cell structure is pointable-at on the wall at `0.95`.
+
+---
+
+# Second pass — the material, not just the motion
+
+**Status:** approved, implemented
+
+The first pass fixed direction, speed and grain and was verified to fall. It
+still read as fog, and two of its decisions turned out to be wrong.
+
+## What the first pass got wrong
+
+**The grain was inverted.** It argued water arrives in sheets and made cells 1.5x
+wider than tall. But what you see of falling water is motion blur, and motion
+blur elongates along the axis of travel — so falling water reads as *vertical*
+streaks. Wide cells falling produced horizontal layers descending, which is if
+anything a purer fog signal than the plumes it replaced. Cells now run ~7x
+taller than wide (`x*12.0` against `y*1.7`, at `fbm(rq*1.5)`).
+
+**The material was never addressed.** Direction, speed and grain are all
+properties of the *motion*; none of them changes what the field is made of. A
+sum of smooth octaves is continuous, soft-edged and low-contrast everywhere,
+which is the definition of a gas — `fbm` is the standard construction *for*
+cloud. Liquid is the opposite: mostly nothing, punctuated by sparse bright runs
+with definite edges.
+
+## Choosing the construction by measurement
+
+Four candidates were measured over 300k samples, using a JS port of the exact
+`hash`/`noise`/`fbm` in `room.js`:
+
+| construction | mean | median | "lit" area |
+|---|---|---|---|
+| `1-\|2n-1\|` on the sum | 0.800 | 0.824 | 39% |
+| `\|2n-1\|` on the sum | 0.200 | 0.176 | 13% |
+| ridged per octave | 0.472 | 0.469 | 21% |
+| **`smoothstep(.55,.72, fbm)`** | **0.128** | **0.000** | **13%** |
+
+The threshold wins on the property that matters: a median of exactly zero means
+more than half the field carries no modulation at all, with a tail reaching 1.0.
+
+Ridged noise was the original proposal and measurement killed it. Ridging works
+per octave; applied to the *sum* it degenerates, because five summed octaves are
+near-Gaussian about 0.5, so `n*2-1` sits near zero and `1-|…|` sits near one —
+producing a field that is bright almost everywhere with rare dark notches, the
+exact inverse of the intent. Thresholding the 5-octave `fbm` keeps the organic,
+non-repeating quality that motivated ridging in the first place.
+
+## The construction
+
+```glsl
+vec2 rq = vec2(dp.x*12.0, dp.y*1.7 + uTime*0.44) + uWind*t*2.0;
+float n = fbm(rq*1.5);
+wetRun  = (smoothstep(0.55, 0.72, n) - 0.128) * uWet;   // sparse bright water
+wetSoft = (n - 0.486) * uWet;                            // unsteady light
+```
+
+Both offsets are the measured means of their own field, so each term modulates
+light around its unlit value rather than biasing the room brighter when it
+rains. One `fbm` call, two reaches — the original structure survives; what
+changed is that the two reaches take different sharpness off it.
+
+Fall rate `0.44/1.7 = 0.259` screen-heights/sec, ~3.9s per screen.
+
+## Where each term is allowed to act
+
+This is the part the first implementation of this pass got wrong, and the
+screenshot caught it.
+
+`thrown` was `pane*0.80 + spill*0.55`, and `spill` is a broad exponential still
+reading at ~0.16 clear across the viewport. Multiplying that sum by the sharp
+term drew water down every wall in the room — invisible with the old smooth
+field, overwhelming with sparse bright runs, and precisely the "pointable
+structure" outcome this design excludes.
+
+The two are therefore kept apart until after the weather:
+
+```glsl
+float tPane = pane*0.80, tSpill = spill*0.55;
+...
+tPane  *= 1.0 + wetRun*0.29;    // sharp — water is on the glass
+tSpill *= 1.0 + wetSoft*0.12;   // soft  — the same light after crossing the room
+col += lightCol * (tPane + tSpill) * lightI * add;
+col *= 1.0 + wetSoft*0.06;      // room-wide, soft only
+```
+
+`0.29` comes from the measured tail: the sharp term runs `-0.128..+0.872` about
+its mean, landing the pane between −3.7% and +25%. The asymmetry is the point —
+a slightly dimmed baseline with bright runs through it — and +25% stays clear of
+the ±39% that tore the window into lobes.
+
+## Verified
+
+Falls at 0.20–0.27 screen-heights/sec across three sample separations. Reads as
+water on the glass at `0.95` with the walls clean; subtle at `0.15`.
+`check-contrast.mjs` passes.
+
+Measured speed runs below the predicted 0.259 because the harness averages each
+row across x, which smears vertically-elongated features — a bias in the
+measurement, not a slowdown in the shader. Direction is unaffected and
+unambiguous.
