@@ -74,6 +74,31 @@ async function psn() {
   };
 }
 
+/* The subject line of a pushed commit.
+
+   A PushEvent used to carry `commits` and `size` in its payload, and the
+   message was read straight out of it. That payload is now exactly
+   {repository_id, push_id, ref, head, before} — no commits, no size — so the
+   old read found an empty array every time and fell through to a count that
+   was also missing, which is where "pushed 0 commits" came from. Not
+   intermittently: on every push the row has ever shown.
+
+   `head` survives, so the message is fetched rather than read. One extra
+   request per run, against 5000/hour authenticated. */
+async function headCommitMessage(repo, sha, headers) {
+  if (!repo || !sha) return null;
+  const res = await fetch(`https://api.github.com/repos/${repo}/commits/${sha}`, { headers });
+  if (!res.ok) return null;
+  const body = await res.json();
+  const line = String((body.commit && body.commit.message) || "").split("\n")[0].trim();
+  return line || null;
+}
+
+/* refs/heads/main → main. Only used for the fallback below. */
+function branchOf(ref) {
+  return String(ref || "").replace(/^refs\/heads\//, "") || "a branch";
+}
+
 /* ---------- GitHub: latest public activity (no secret needed) ---------- */
 async function github() {
   const user = process.env.GH_USER;   // not GITHUB_USER — GitHub reserves that prefix for Variables/Secrets
@@ -89,8 +114,12 @@ async function github() {
   const pl = ev.payload || {};
   if (ev.type === "PushEvent") {
     type = "push";
-    const commits = pl.commits || [];
-    message = commits.length ? commits[commits.length - 1].message.split("\n")[0] : `pushed ${pl.size || 0} commits`;
+    /* If the lookup fails, say what is actually known — which branch was
+       pushed — rather than inventing a commit count. A number nobody
+       measured is how this row went three days telling everyone that
+       nothing had been pushed. */
+    message = (await headCommitMessage(ev.repo && ev.repo.name, pl.head, headers))
+      || `pushed to ${branchOf(pl.ref)}`;
   } else if (ev.type === "PullRequestEvent") { type = "pr"; message = (pl.pull_request && pl.pull_request.title) || "opened a pull request"; }
   else if (ev.type === "CreateEvent") { type = "create"; message = `created ${pl.ref_type || "repo"}`; }
   else if (ev.type === "IssuesEvent") { type = "issue"; message = (pl.issue && pl.issue.title) || "issue activity"; }
