@@ -86,12 +86,36 @@ var FRAG = [
   "  vec2 dp = vec2((uv.x-wc.x)*asp, uv.y-wc.y);",
   "  vec2 d  = abs(dp);",
   "  float breath = 1.0 + 0.03*sin(uTime*0.11);",
-  "  float pane = (1.0 - smoothstep(0.11, 0.33*breath, d.x)) * (1.0 - smoothstep(0.14, 0.38*breath, d.y));",
+  /* How undefined the light is allowed to be. Direct sun through glass throws a
+     patch with an edge; overcast is undirectional and throws none, which is a
+     geometric consequence of cloud that the room did not have — cloudedRoom()
+     handled cloud's colour and nothing handled its shape.
+
+     Humidity stays in at about a third weight rather than being dropped. It is
+     a real scatterer, DESIGN.md promises every field of the call renders
+     something, and a muggy clear day should still read softer than a dry one.
+     What it may no longer do is dominate: driven by humidity alone this term
+     sat near-permanently high in a subtropical climate — at Hsinchu's typical
+     88% it was 0.74 under a cloudless sky, so the room was never once crisp.
+     Now that same day softens by 0.26 and an overcast one by 0.90. */
+  "  float soften = max(uCloud, uHaze*0.35);",
+  /* The pane's falloff tightens as the sky clears. Both bands keep their
+     midpoint, so the window gains definition in place instead of shrinking:
+     0.22 wide in x when overcast, 0.11 when clear, around the same 0.22 centre.
+
+     The floor matters. DESIGN.md refuses a picture of a window, and a hard
+     rectangle is what that means — at 0.11 a quarter of the patch is still
+     transition, which is an edge you can see but not trace. Raise the clear-sky
+     lo values, never the hi ones, if it ever starts reading as a drawn shape. */
+  "  float loX = mix(0.15, 0.11, soften), hiX = mix(0.26, 0.33, soften);",
+  "  float loY = mix(0.20, 0.14, soften), hiY = mix(0.32, 0.38, soften);",
+  "  float pane = (1.0 - smoothstep(loX, hiX*breath, d.x)) * (1.0 - smoothstep(loY, hiY*breath, d.y));",
   "  float spill = exp(-length(dp) * 1.85);",
-  /* Humid air scatters. The spill loses its edge and carries further into the
-     room — this is what relative_humidity_2m is for, and it is the difference
-     between a clear winter light and the same sun through August air. */
-  "  spill = mix(spill, pow(spill, 0.68), uHaze);",
+  /* Scattered light loses the spill its edge and carries it further into the
+     room. At soften 0.8 the wash one screen-height out rises from 0.157 to
+     0.255 — 62% more light on the far wall, which is most of why an overcast
+     room feels like one. On a clear Hsinchu day it is now +20% instead. */
+  "  spill = mix(spill, pow(spill, 0.68), soften);",
   /* A bright room is already the daylight; adding the window's spill at full
      strength on top of it double-counts and washes the walls out to white.
      Damp the addition by how lit the room already is, so the pane still blows
@@ -166,8 +190,11 @@ var FRAG = [
   "    tSpill *= 1.0 + wetSoft*0.12;",
   "  }",
   "  col += lightCol * (tPane + tSpill) * lightI * add;",
-  // and the veil of scattered light the damp air itself is lit by
-  "  col += lightCol * lightI * uHaze * 0.05;",
+  /* …and the veil of scattered light the air itself is lit by. On `soften` for
+     the same reason as the rest: this is a flat lift across the whole viewport,
+     so at Hsinchu humidity it was laying 3.7% of fog over a cloudless room. Now
+     1.3% when clear, 4.5% when overcast. */
+  "  col += lightCol * lightI * soften * 0.05;",
   /* The room keeps the soft field, not the sharp one. Sparse bright runs
      crawling across the walls behind text is exactly the thing the paragraph
      above refuses; here the rain is only allowed to stop the light being
