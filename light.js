@@ -315,55 +315,19 @@ export var STRIP = {
      0.78, and min() like CLEAR's max(), so nothing jumps when it takes hold.
 
      Daylight only. Once the lamp is the caster the throw flips sign and the
-     centre tops out at 0.733 on its own, so this never binds after dark.
-
-     Was 0.88, and moved with PAR_X. The clamp is applied before the pointer
-     term, so whatever PAR_X can add lands on top of this bound: at 0.88 with
-     PAR_X 5.4 the far corner puts the centre at 1.015 and leaves under half
-     the strip on screen, which gives back most of what this constant was
-     added to fix. Measured at the far corner: 59% visible before, 47% with
-     PAR_X raised and this left alone, 60% with both moved together. The cost
-     is that the clamp engages from about window x 0.72 rather than 0.76, so a
-     slightly wider band of the afternoon has the strip placed rather than
-     thrown — the same trade CLEAR makes every morning. */
-  CLEAR_R: 0.82,
-  /* What survives full overcast, as a fraction of the clear-sky throw.
-     `1.0 - uCloud` meant exactly zero: at overcast noon the sun term vanished
-     and the lamp had not yet risen, so the strip did not dim, it disappeared,
-     and the record stopped being in the room on the greyest days of the year.
-
-     Diffuse skylight still reaches the prism; what it lacks is a beam. So the
-     throw falls hard and then holds, rather than falling to nothing. 0.35 sits
-     under the lamp's night-time 0.55, which keeps the sun and the lamp
-     distinguishable as casters.
-
-     Read by the shader and by stripI() from this one place. They modelled the
-     same quantity separately once, and the sweep went on reporting a strip the
-     shader had stopped drawing. */
-  OVERCAST: 0.35,
+     centre tops out at 0.733 on its own, so this never binds after dark. */
+  CLEAR_R: 0.88,
   /* How much the strip answers the pointer, against the room's own parallax.
      It is applied after CLEAR, not before — folded in earlier it went through
      the max() and the strip lost all sideways movement for the seven hours the
      clamp is active, leaving only the vertical component. It reacted, so it
      looked deliberate, which is the worst kind of wrong.
 
-     Still wider in x than in y, because that is the axis the strip is thin on
-     and so the axis where a slide reads as the light moving rather than as the
-     whole room drifting.
-
-     But these are rates against the window's own, and the window moves at 1.
-     What the eye reads as parallax is the *difference*, which at x3.2/y1.0 was
-     ±0.055 across and exactly nothing vertically — the strip and the window
-     rose and fell together, so the two never separated in depth. The old note
-     here said a gain in y "would just bob it", and at y1.0 that was true of
-     any y motion at all, because all of it was shared with the window. Held
-     above the window's rate it is not bobbing, it is a second plane.
-
-     x5.4/y1.8 doubles the horizontal differential to ±0.110 and gives the
-     vertical ±0.020. See CLEAR_R: this term is applied after that clamp, so
-     raising x here moves the bound there. */
-  PAR_X: 5.4,
-  PAR_Y: 1.8,
+     Wider in x than in y because that is the axis the strip is thin on: at
+     x3.2 the slide is about three times the strip's own half-width and reads
+     as the light shifting, while the same gain in y would just bob it. */
+  PAR_X: 3.2,
+  PAR_Y: 1.0,
   /* Additive strength at full intensity. 0.22 until the halo arrived — the
      bloom is additive on top of the core, so it enters the peak bound, and at
      0.22 the worst case came to 0.78 against a ceiling of 0.65. The rule for
@@ -464,10 +428,7 @@ export function stripColor(sleeve) {
    Excludes the record's own washI: that is whether there is a record at all,
    which is the caller's business, not the light model's. */
 export function stripI(alt, cloud, cover) {
-  /* Mirrors the shader's mix(1.0, OVERCAST, uCloud). Both read STRIP.OVERCAST
-     so the sweep cannot drift from what is drawn. */
-  var k = clamp01(cloud || 0);
-  var sun = windowI(alt) * (1 - k * (1 - STRIP.OVERCAST));
+  var sun = windowI(alt) * (1 - clamp01(cloud || 0));
   var lamp = tungstenI(alt) * STRIP.LAMP_W;
   return Math.max(sun, lamp) * (1 - clamp01(cover || 0));
 }
