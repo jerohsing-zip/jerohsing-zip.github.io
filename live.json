@@ -1,5 +1,5 @@
 {
-  "fetchedAt": "2026-08-07T06:35:56.190Z",
+  "fetchedAt": "2026-08-07T11:38:25.106Z",
   "location": {
     "city": "East District",
     "region": "Hsinchu",
@@ -10,8 +10,8 @@
   "shipping": {
     "type": "push",
     "repo": "jerohsing-zip/jerohsing-zip.github.io",
-    "message": "Merge pull request #6 from jerohsing-zip/shipping-message",
+    "message": "Merge pull request #8 from jerohsing-zip/revert-strip-depth",
     "url": "https://github.com/jerohsing-zip/jerohsing-zip.github.io",
-    "at": "2026-08-07T06:32:40Z"
+    "at": "2026-08-07T09:39:32Z"
   }
 }
