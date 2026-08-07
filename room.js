@@ -262,7 +262,13 @@ var FRAG = [
      There is no uTime term in here, and there must not be. A bright band on a
      wall is furniture; a moving field is weather, and the eye cannot stop
      reading weather. That is what the old wash got wrong. */
-  "  float sun = uWinI * (1.0 - uCloud);",
+  /* Falls hard under cloud and then holds, rather than falling to nothing.
+     `1.0 - uCloud` put this at exactly zero at overcast noon — the sun term
+     gone and the lamp not yet risen — so the record left the room entirely on
+     the greyest days. Diffuse skylight still reaches the prism; what it lacks
+     is a beam. STRIP.OVERCAST is what survives, and stripI() in light.js reads
+     the same constant so the sweep cannot describe a strip this does not draw. */
+  "  float sun = uWinI * mix(1.0, " + f(STRIP.OVERCAST) + ", uCloud);",
   "  float lampw = uWarmI * " + f(STRIP.LAMP_W) + ";",
   "  float stripI = uWashI * max(sun, lampw) * (1.0 - uCover);",
   "  if (stripI > 0.002) {",
