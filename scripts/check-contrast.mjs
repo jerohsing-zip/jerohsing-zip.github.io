@@ -2,6 +2,7 @@
    Sweeps every solar altitude the room can reach and checks the derived
    tokens, then checks the fixed paper surfaces.
    Run: node scripts/check-contrast.mjs */
+import { readFileSync } from "node:fs";
 import {
   tokensFor, contrast, relLum, washRoom, bandGrounds, orderByHue, luma,
   stripI, stripPeak, stripColor, LIGHT, BAND_ALPHA, STRIP
@@ -87,6 +88,48 @@ for (const [name, fg, bg, min] of pairs) {
   console.log(`${name.padEnd(34)} ${c.toFixed(2)}:1`);
   if (c < min) bad(`${name} = ${c.toFixed(2)}:1, needs ${min}`);
 }
+
+/* ---- light on the page may only ever lighten it ----
+   paper.js blits the room's light into each band beneath the ink. The claim
+   that this cannot cost contrast rests on two things, and neither is the kind
+   of thing to leave in a comment.
+
+   One: the blend is `screen`, which cannot lower a channel. Every pair above
+   is dark on paper and contrast is monotonic in the lighter colour, so a
+   brighter sheet raises every ratio. `soft-light` and `overlay` darken where
+   the source is dark, and swapping to either would silently invert this —
+   so the stylesheet is read and the value checked.
+
+   Two: the layer is beneath the text. Over it, the same screen would lift ink
+   from ~0.01 toward the lift value and take the proof with it. z-index -1
+   inside an isolated .band is what keeps it under, so that is checked too.
+
+   Then the worst case is exercised directly: the paper screened against pure
+   white — brighter than any light the room can throw — must still clear AA for
+   every pair. Bounding it rather than tracking it, the same way bandGrounds
+   bounds the room behind the band. */
+const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const bandLight = (css.match(/\.band__light\s*\{[^}]*\}/) || [""])[0];
+if (!/mix-blend-mode:\s*screen/.test(bandLight)) {
+  bad(".band__light must blend with `screen` — anything that can darken breaks the contrast argument");
+}
+if (!/z-index:\s*-1/.test(bandLight)) {
+  bad(".band__light must sit at z-index -1, beneath the ink — over the text it lightens the ink too");
+}
+if (!/\.band\s*\{[^}]*isolation:\s*isolate/.test(css)) {
+  bad(".band must isolate, or .band__light escapes to the root stacking context and lands behind the paper");
+}
+
+/* screen(a, b) = 1 - (1-a)(1-b), per channel. At b = 1 the sheet goes white,
+   which is past anything the room can put there. */
+const screenWith = (base, src) => base.map((c, i) => 1 - (1 - c) * (1 - src[i]));
+const litPaper = screenWith(paper, [1, 1, 1]);
+for (const [name, fg, , min] of pairs) {
+  const c = contrast(fg, litPaper);
+  if (c < min) bad(`${name} on fully lit paper = ${c.toFixed(2)}:1, needs ${min}`);
+}
+console.log(`paper light: screen, beneath the ink; worst pair on a white-lit sheet ` +
+  `${Math.min(...pairs.map(([, fg]) => contrast(fg, litPaper))).toFixed(2)}:1`);
 
 /* ---- the record's lean must not be able to break the room ----
    The wash is no longer weather in the air; it is a flat, motionless lean of
