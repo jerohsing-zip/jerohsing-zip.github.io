@@ -10,6 +10,7 @@
    ============================================================ */
 import { animate, stagger, inView } from "./vendor/motion.js";
 import { createRoom } from "./room.js";
+import { createPaperLight } from "./paper.js";
 import { solarPosition, albumPalette } from "./signals.js";
 import {
   tokensFor, windowPos, windowI, tungstenI,
@@ -30,6 +31,7 @@ import {
 
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
   /* No default location. Until location.json (or live.json) resolves, the
      page honestly reports that it does not know where the signal is coming
@@ -39,6 +41,7 @@ import {
   var coord = null;
 
   var room = null;
+  var paper = null;
   var lightInit = false;
 
   /* The sky the room is currently under. Held rather than passed straight to
@@ -438,7 +441,12 @@ import {
     return Math.max(0, Math.min(1, window.scrollY / Math.max(top, 1)));
   }
   window.addEventListener("scroll", function () {
-    if (room) room.setCover(coverNow());
+    var c = coverNow();
+    if (room) room.setCover(c);
+    /* The same number, read the other way round. It tells the room how much of
+       its light the page has taken and tells the page how much it has been
+       given, so the light hands over instead of going out. */
+    if (paper) paper.setCover(c);
   }, { passive: true });
 
   function ensureRoom() {
@@ -447,6 +455,13 @@ import {
     /* A page loaded mid-scroll — a refresh, or a #segments deep link — starts
        correct rather than fading the strip out after the first frame. */
     if (room) room.setCover(coverNow());
+    /* Only ever built on top of a room that exists. With no WebGL there is no
+       canvas to blit and nothing to catch, and the page stays exactly as it is
+       rather than growing an empty layer over every band. */
+    if (room && room.canvas) {
+      paper = createPaperLight($$(".band"), room.canvas);
+      if (paper) paper.setCover(coverNow());
+    }
   }
 
   wireAssets();

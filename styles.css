@@ -234,6 +234,42 @@ img { max-width: 100%; display: block; }
   position: relative;
   background: var(--band-a);
   padding: clamp(64px, 11vh, 124px) var(--edge);
+  /* Creates the stacking context .band__light is painted inside. Without it a
+     negative z-index child escapes to the root context and lands *behind* this
+     background instead of on it, and the blend reaches the room as well — the
+     same light counted twice. */
+  isolation: isolate;
+}
+/* The room's light, landing on the paper. See paper.js for what it is and why
+   it exists; the two rules that matter are both here.
+
+   z-index -1 puts it above this element's background and below every in-flow
+   descendant — so it lights the sheet and never touches the ink. An overlay
+   over the text would lift ink from ~0.01 relative luminance to ~0.16 and take
+   the proven contrast with it.
+
+   screen only lightens. Every checked pair is dark on paper and contrast is
+   monotonic in the lighter colour, so this cannot lower a single ratio the
+   sweep proves. Do not change it to soft-light or overlay, both of which
+   darken where the source is dark — check-contrast.mjs asserts this value for
+   that reason. */
+/* Selector is `.band > .band__light`, not `.band__light`, on purpose. The
+   `.band > *` rule further down carries equal specificity and comes later, so
+   it would win and clamp this to --maxw with auto margins — a light patch
+   1120px wide, centred, in a band that is not. The child selector outranks it. */
+.band > .band__light {
+  position: absolute; inset: 0; z-index: -1;
+  width: 100%; height: 100%;
+  max-width: none; margin: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0;                          /* paper.js sets this per frame */
+}
+/* The room is not drawn at all under reduced motion, so there is no light to
+   land and nothing here to disable — but if the canvas is ever created without
+   a room behind it, an empty blit must not tint anything. */
+@media (prefers-reduced-motion: reduce) {
+  .band__light { display: none; }
 }
 /* The scene crosses between light and dark once each morning and evening.
    Easing the crossing makes it read as the room changing rather than as the
