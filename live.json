@@ -1,5 +1,5 @@
 {
-  "fetchedAt": "2026-09-05T00:20:47.489Z",
+  "fetchedAt": "2026-09-06T18:23:03.453Z",
   "location": {
     "city": "Adachi",
     "region": "Tokyo",
@@ -8,10 +8,10 @@
   },
   "playing": null,
   "shipping": {
-    "type": "push",
+    "type": "pr",
     "repo": "jerohsing-zip/jerohsing-zip.github.io",
-    "message": "Merge pull request #8 from jerohsing-zip/revert-strip-depth",
+    "message": "opened a pull request",
     "url": "https://github.com/jerohsing-zip/jerohsing-zip.github.io",
-    "at": "2026-08-07T09:39:32Z"
+    "at": "2026-08-09T05:52:00Z"
   }
 }
