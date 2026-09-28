@@ -1,10 +1,10 @@
 {
-  "fetchedAt": "2026-09-15T00:39:41.743Z",
+  "fetchedAt": "2026-09-28T01:41:19.630Z",
   "location": {
-    "city": "East District",
-    "region": "Hsinchu City",
-    "tz": "Asia/Taipei",
-    "updatedAt": "2026-09-15T00:00:16.536Z"
+    "city": "Adachi",
+    "region": "Tokyo",
+    "tz": "Asia/Tokyo",
+    "updatedAt": "2026-09-28T00:00:20.731Z"
   },
   "playing": null,
   "shipping": {
